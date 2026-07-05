@@ -115,6 +115,25 @@ def test_is_released_and_build_event() -> None:
     assert "4.2%" in news.title
 
 
+async def test_armed_release_flows_through_pipeline() -> None:
+    # Flagship: a released macro print runs the full graph to an order.
+    from app.graph.builder import build_graph
+    from app.graph.state import initial_state
+
+    released = CalendarEvent(
+        id="cpi", title="US CPI", when=datetime.now(UTC), impact="High",
+        volatility=5, forecast="3.1%", previous="3.0%", actual="4.2%",
+    )
+    news = build_release_event(released)  # source="economic"
+    assert news.source == "economic"
+
+    final = await build_graph().ainvoke(initial_state(news))
+    # "CPI" -> BEAR (offline classifier) -> short opened on futures -> executed.
+    assert final["status"] == "executed"
+    assert final["signal"].sentiment == "BEAR"
+    assert final["order"].side == "sell"
+
+
 async def test_poll_once_emits_when_released(monkeypatch: pytest.MonkeyPatch) -> None:
     now = datetime.now(UTC)
     armed_ev = CalendarEvent(id="cpi", title="US CPI", when=now, impact="High", volatility=5)

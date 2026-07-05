@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     # Trump / Truth Social poller (opt-in: set a statuses feed URL to start it).
     truth_social_url: str = ""
     truth_social_poll_interval_s: int = Field(default=10, ge=2)
+    # Congress.gov bill tracker (opt-in: needs a free API key + tracked bills).
+    congress_api_key: str = ""
+    congress_tracked_bills: str = ""  # e.g. "119/hr/1747,119/s/1582"
+    congress_poll_interval_s: int = Field(default=300, ge=60)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

@@ -108,6 +108,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
         )
 
+    # Congress.gov bill tracker (opt-in: needs API key + tracked bills).
+    if settings.congress_api_key and settings.congress_tracked_bills:
+        from app.sources.congress import poll_loop as congress_poll_loop
+
+        tasks.append(
+            asyncio.create_task(
+                congress_poll_loop(
+                    app.state.queue,
+                    settings.congress_tracked_bills,
+                    settings.congress_api_key,
+                    settings.congress_poll_interval_s,
+                ),
+                name="congress-poller",
+            )
+        )
+
     try:
         yield
     finally:
