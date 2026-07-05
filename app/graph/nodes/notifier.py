@@ -67,6 +67,11 @@ async def notifier_node(state: TradingState) -> dict[str, Any]:
     summary = _summarize(state)
     log.info("pipeline_done", **summary)
 
+    # Persist to the dashboard history buffer.
+    from app.services.store import get_store
+
+    await get_store().record_history(summary)
+
     # Broadcast the full pipeline result to dashboard clients.
     await emit(
         "pipeline_done",

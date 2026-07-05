@@ -52,6 +52,10 @@ class Store(Protocol):
     # Dedup
     async def seen_before(self, key: str, ttl_s: int) -> bool: ...
 
+    # History (for the dashboard)
+    async def record_history(self, entry: dict) -> None: ...
+    async def history(self, limit: int = 100) -> list[dict]: ...
+
     async def snapshot(self) -> dict: ...
 
 
@@ -66,6 +70,7 @@ class InMemoryStore:
         self._positions: dict[str, dict] = {}  # asset -> position detail
         self._pnl: dict[str, float] = {}  # day -> pnl
         self._dedup: dict[str, float] = {}  # key -> expiry epoch
+        self._history: list[dict] = []  # recent pipeline results (bounded)
 
     async def connect(self) -> None:
         log.info("store_backend", backend="in-memory")
@@ -130,6 +135,13 @@ class InMemoryStore:
             return True
         self._dedup[key] = now + ttl_s
         return False
+
+    async def record_history(self, entry: dict) -> None:
+        self._history.append(entry)
+        del self._history[:-200]  # keep the last 200
+
+    async def history(self, limit: int = 100) -> list[dict]:
+        return list(reversed(self._history[-limit:]))
 
     async def snapshot(self) -> dict:
         return {
@@ -212,6 +224,14 @@ class RedisStore:
         # SETNX-with-TTL: returns True if the key already existed.
         was_set = await self._r.set(f"fst:dedup:{key}", "1", nx=True, ex=ttl_s)
         return not bool(was_set)
+
+    async def record_history(self, entry: dict) -> None:
+        await self._r.lpush("fst:history", orjson.dumps(entry).decode())
+        await self._r.ltrim("fst:history", 0, 199)
+
+    async def history(self, limit: int = 100) -> list[dict]:
+        raw = await self._r.lrange("fst:history", 0, limit - 1)
+        return [orjson.loads(v) for v in raw]
 
     async def snapshot(self) -> dict:
         reason = await self._r.get(self.KILL_REASON_KEY)

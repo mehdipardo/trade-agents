@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter
 
 from app.config import get_settings
+from app.services.store import get_store
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
 
@@ -33,3 +34,24 @@ async def health() -> dict[str, object]:
         "asset_whitelist": list(settings.asset_whitelist_set),
         "time": datetime.now(UTC).isoformat(),
     }
+
+
+@router.get("/signals")
+async def signals(limit: int = 50) -> dict[str, list[dict]]:
+    """Recent pipeline results that produced a signal."""
+    items = [h for h in await get_store().history(limit) if h.get("sentiment")]
+    return {"signals": items}
+
+
+@router.get("/orders")
+async def orders(limit: int = 50) -> dict[str, list[dict]]:
+    """Recent executed orders."""
+    items = [h for h in await get_store().history(limit) if h.get("order_status")]
+    return {"orders": items}
+
+
+@router.get("/positions")
+async def positions() -> dict[str, object]:
+    """Currently open positions + risk-state snapshot."""
+    store = get_store()
+    return {"positions": await store.open_positions(), "state": await store.snapshot()}

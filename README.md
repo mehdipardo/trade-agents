@@ -86,22 +86,16 @@ data/scenarios/      canonical demo scenarios (JSON)
 tests/               unit + integration tests
 ```
 
-## Roadmap
+## Pipeline
 
-Development follows the incremental roadmap in the project brief (Étape 0 →
-Étape 9). This README is updated as steps land.
+```
+news ─▶ dedup ─▶ analyst (1 LLM call) ─▶ risk (deterministic) ─▶ executor ─▶ notifier
+                     │ NEUTRAL/low-conf         │ vetoed                │
+                     └──────────────────────────┴───────────────────────┴─▶ notifier ─▶ WS/Slack
+```
 
-- **Étape 0 — Scaffold** ✅ config + safety guards, structured logging,
-  `GET /api/health`, Dockerfile + docker-compose.
-- **Étape 1 — Schemas + simulator** ✅ models, 5 demo scenarios, normalizer,
-  `POST /admin/inject`, asyncio queue + worker.
-- **Étape 2 — Mock graph** ✅ LangGraph topology, timed nodes, conditional edges.
-- **Étape 3 — LLM analyst** ✅ structured output + retry + NEUTRAL fallback,
-  prompt-injection defense, honest offline classifier when key-less.
-- **Étape 4 — Risk engine** ✅ pure deterministic rules, Redis/in-memory store,
-  kill switch, `/admin/killswitch` + `/admin/state`.
-- **Étape 5 — Executor** ✅ CCXT **futures** sandbox (shorts supported),
-  idempotent orders, SL/TP position monitor; offline paper fill when key-less.
+Every node records its latency in `timings_ms`; the notifier broadcasts the
+full state to `/ws/live` and posts to Slack (non-blocking).
 
 ## Exchange: futures testnet (shorts)
 
@@ -111,3 +105,63 @@ geo-blocked in France, so the default is **Kraken Futures** (CCXT
 `krakenfutures`, demo environment via `set_sandbox_mode(True)`); **MEXC** is a
 supported alternative. Use **testnet keys with no withdrawal rights**. Without
 keys the executor runs an **offline paper fill** so the full demo still works.
+For a live Kraken Futures testnet, set the whitelist to its perpetual symbols,
+e.g. `ASSET_WHITELIST=BTC/USD:USD,ETH/USD:USD,SOL/USD:USD`.
+
+## Risk rules (defaults, all configurable)
+
+| Rule | Default | Rejects when |
+|---|---|---|
+| Confidence threshold | 0.6 | `confidence < threshold` |
+| Min intensity | 3 | `intensity < 3` |
+| Sizing by intensity | 3→1%, 4→2%, 5→3% of equity | — |
+| Notional cap | min(5% equity, 100 USDT) | — |
+| Side | BULL→buy (long), BEAR→sell (short) | — |
+| Stop-loss / take-profit | 1.5% / 3.0% (RR 1:2) | — |
+| Max trades / hour | 6 (sliding) | exceeded |
+| Cooldown per asset | 15 min | recent trade on asset |
+| Positions per asset | 1 (either direction) | already open |
+| Daily loss cap | −3% equity | **latches kill switch** |
+| Manual kill switch | `/admin/killswitch` | active |
+
+## API
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/health` | liveness + safety-guard status |
+| GET | `/api/signals` `/api/orders` `/api/positions` | dashboard reads |
+| POST | `/admin/inject` | inject a scenario or raw event |
+| POST | `/admin/killswitch` | activate / reset the kill switch |
+| GET | `/admin/state` | risk-state snapshot |
+| GET | `/admin/scenarios` | list demo scenarios |
+| POST | `/webhooks/news` | secured generic webhook (`X-Webhook-Secret`) |
+| WS | `/ws/live` | live pipeline feed |
+
+## Demo (5 scenarios, no external source)
+
+```bash
+docker compose up --build          # or: uvicorn app.main:app
+python scripts/demo.py             # injects the 5 scenarios and prints outcomes
+```
+
+Expected (sequential): `trump_btc_bull` → BULL/BTC **long executed**;
+`cpi_hot_bear` → BEAR/BTC, **vetoed** by the concurrency guard because BTC is
+already held from the Trump trade (short a BTC-free run instead to see it
+execute); `sec_etf_approval` → BULL/SOL **long executed**; `neutral_report` →
+**skipped_neutral**; `prompt_injection` → **NEUTRAL** (injection ignored). The
+BEAR-opens-a-short path is covered directly in `tests/test_risk_rules.py` and
+`tests/test_graph_e2e.py`.
+
+## Limitations (honest)
+
+- Demonstrates **agentic reactivity** (news → order in ~1–2 s), **not** alpha vs HFT.
+- Paper/testnet only; there is no live-trading code path.
+- No native OCO: SL/TP are enforced by a 2 s polling monitor.
+- In offline mode (no keys) the analyst uses a keyword classifier and orders are
+  paper fills — clearly logged, never presented as real analysis.
+
+## Roadmap status
+
+Étapes **0–8 complete** (scaffold, schemas+simulator, mock graph, LLM analyst,
+risk engine, executor+shorts, notifier, ingestion, hardening+demo). Étape 9
+(eval golden set, Langfuse, native OCO) is an optional stretch.
