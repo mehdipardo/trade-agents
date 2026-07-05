@@ -28,11 +28,10 @@ def create_queue() -> asyncio.Queue[NewsEvent]:
 
 
 async def process_event(event: NewsEvent) -> None:
-    """Handle a single event.
+    """Handle a single event by running it through the LangGraph pipeline."""
+    from app.graph.builder import get_graph
+    from app.graph.state import initial_state
 
-    Étape 1: log the normalized event. Later steps replace this body with a
-    call into the compiled LangGraph pipeline.
-    """
     log.info(
         "event_dequeued",
         event_id=event.id,
@@ -40,6 +39,13 @@ async def process_event(event: NewsEvent) -> None:
         author=event.author,
         title=event.title,
         received_at=event.received_at.isoformat(),
+    )
+    final = await get_graph().ainvoke(initial_state(event))
+    log.info(
+        "pipeline_result",
+        event_id=event.id,
+        status=final["status"],
+        timings_ms=final["timings_ms"],
     )
 
 
