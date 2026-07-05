@@ -64,15 +64,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_store(settings.redis_url)
     await init_exchange(settings)
 
-    # Ingestion queue + worker + SL/TP position monitor.
+    # Ingestion queue + worker + SL/TP position monitor + optional RSS poller.
     app.state.queue = create_queue()
-    worker_task = asyncio.create_task(worker_loop(app.state.queue), name="ingestion-worker")
-    monitor_task = asyncio.create_task(position_monitor_loop(), name="position-monitor")
+    tasks = [
+        asyncio.create_task(worker_loop(app.state.queue), name="ingestion-worker"),
+        asyncio.create_task(position_monitor_loop(), name="position-monitor"),
+    ]
+
+    from app.ingestion.rss_poller import parse_feeds_setting, rss_poller_loop
+
+    feeds = parse_feeds_setting(settings.rss_feeds)
+    if feeds:
+        tasks.append(
+            asyncio.create_task(
+                rss_poller_loop(app.state.queue, feeds, settings.rss_poll_interval_s),
+                name="rss-poller",
+            )
+        )
 
     try:
         yield
     finally:
-        for task in (worker_task, monitor_task):
+        for task in tasks:
             task.cancel()
             try:
                 await task
@@ -101,10 +114,12 @@ def create_app() -> FastAPI:
 
     from app.api.routes_admin import router as admin_router
     from app.api.routes_dashboard import router as dashboard_router
+    from app.api.routes_webhooks import router as webhooks_router
     from app.api.ws import router as ws_router
 
     app.include_router(dashboard_router)
     app.include_router(admin_router)
+    app.include_router(webhooks_router)
     app.include_router(ws_router)
 
     get_logger("app").info("app_created", app_env=settings.app_env)

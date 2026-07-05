@@ -6,16 +6,15 @@ in the brief are added with the risk engine (Étape 4).
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, model_validator
 
+from app.api.deps import enqueue
 from app.ingestion.normalizer import normalize_payload
 from app.ingestion.simulator import list_scenarios, load_scenario
 from app.logging_config import get_logger
-from app.models.schemas import NewsEvent
 from app.services.store import get_store
 
 log = get_logger("app.api.admin")
@@ -46,16 +45,6 @@ class InjectResponse(BaseModel):
     status: str = "queued"
 
 
-def _get_queue(request: Request) -> asyncio.Queue[NewsEvent]:
-    queue = getattr(request.app.state, "queue", None)
-    if queue is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ingestion worker not ready",
-        )
-    return queue
-
-
 @router.post(
     "/inject",
     status_code=status.HTTP_202_ACCEPTED,
@@ -80,15 +69,7 @@ async def inject(body: InjectRequest, request: Request) -> InjectResponse:
                 detail=str(exc),
             ) from exc
 
-    queue = _get_queue(request)
-    try:
-        queue.put_nowait(event)
-    except asyncio.QueueFull as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ingestion queue is full",
-        ) from exc
-
+    enqueue(request, event)
     log.info("event_injected", event_id=event.id, source=event.source, title=event.title)
     return InjectResponse(event_id=event.id)
 
