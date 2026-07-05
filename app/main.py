@@ -40,8 +40,12 @@ def _load_settings():
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: startup and shutdown hooks."""
+    import asyncio
+
+    from app.worker import create_queue, worker_loop
+
     settings = _load_settings()
-    configure_logging(json_logs=settings.app_env != "dev" or True)
+    configure_logging(json_logs=True)
     log = get_logger("app.lifespan")
     log.info(
         "startup",
@@ -51,10 +55,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         exchange_id=settings.exchange_id,
         llm_provider=settings.llm_provider,
     )
-    # Later steps: init redis, exchange (sandbox), start ingestion worker.
+
+    # Ingestion queue + single sequential worker. Later steps: init redis and
+    # the exchange (sandbox) here too.
+    app.state.queue = create_queue()
+    worker_task = asyncio.create_task(worker_loop(app.state.queue), name="ingestion-worker")
+
     try:
         yield
     finally:
+        worker_task.cancel()
+        try:
+            await worker_task
+        except asyncio.CancelledError:
+            pass
         log.info("shutdown")
 
 
@@ -72,9 +86,11 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    from app.api.routes_admin import router as admin_router
     from app.api.routes_dashboard import router as dashboard_router
 
     app.include_router(dashboard_router)
+    app.include_router(admin_router)
 
     get_logger("app").info("app_created", app_env=settings.app_env)
     return app

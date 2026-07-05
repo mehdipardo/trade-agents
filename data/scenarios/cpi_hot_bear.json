@@ -1,0 +1,8 @@
+{
+  "author": "US Bureau of Labor Statistics",
+  "title": "US CPI comes in at 4.2% YoY vs 3.1% expected",
+  "content": "US CPI comes in at 4.2% YoY versus 3.1% expected, a hot inflation surprise that implies a more hawkish Fed and a risk-off move across markets.",
+  "url": "https://example.test/news/cpi-hot",
+  "published_at": "2026-07-05T12:30:00Z",
+  "_expected": "BEAR 4, BTC/USDT -> rejected 'no short on spot' if no open position"
+}
