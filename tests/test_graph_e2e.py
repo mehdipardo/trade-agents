@@ -20,8 +20,13 @@ def _safe_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EXCHANGE_SANDBOX", "true")
     monkeypatch.setenv("APP_ENV", "test")
     get_settings.cache_clear()
+    # Fresh risk state per test (the store is a process-wide singleton).
+    from app.services.store import InMemoryStore, set_store
+
+    set_store(InMemoryStore())
     yield
     get_settings.cache_clear()
+    set_store(None)
 
 
 async def _run(scenario: str) -> dict:
@@ -47,6 +52,15 @@ async def test_etf_scenario_maps_sol_and_executes() -> None:
     assert final["status"] == "executed"
     assert final["signal"].asset == "SOL/USDT"
     assert final["order"].symbol == "SOL/USDT"
+
+
+async def test_bear_scenario_rejected_no_short_on_spot() -> None:
+    # cpi_hot_bear -> BEAR with no open position -> risk veto (spot, no short).
+    final = await _run("cpi_hot_bear")
+    assert final["status"] == "rejected_risk"
+    assert final["signal"].sentiment == "BEAR"
+    assert "no short on spot" in final["risk"].reject_reason
+    assert final["order"] is None
 
 
 async def test_neutral_scenario_skipped() -> None:

@@ -1,22 +1,19 @@
 """Risk node.
 
-Étape 2: an APPROVE stub that produces a plausible ``RiskVerdict``. The pure,
-fully-tested deterministic rules (sizing, SL/TP, circuit breakers, kill switch)
-land in Étape 4 and will be called from here.
+Assembles a ``RiskContext`` from the state store, delegates the decision to the
+pure ``app.risk.rules.evaluate`` function, and latches the kill switch when the
+daily loss cap is breached. No trading logic lives here beyond orchestration.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from app.config import get_settings
 from app.graph.state import TradingState
 from app.graph.timing import timed_node
-from app.models.schemas import RiskVerdict
-
-# Fixed defaults for the mock (real values come from config in Étape 4).
-_MOCK_POSITION_SIZE_QUOTE = 25.0
-_MOCK_STOP_LOSS_PCT = 1.5
-_MOCK_TAKE_PROFIT_PCT = 3.0
+from app.risk.rules import RiskConfig, RiskContext, daily_loss_breached, evaluate
+from app.services.store import get_store
 
 
 @timed_node("risk")
@@ -24,15 +21,25 @@ async def risk_node(state: TradingState) -> dict[str, Any]:
     signal = state["signal"]
     assert signal is not None  # routing guarantees a tradable signal here
 
-    side = "buy" if signal.sentiment == "BULL" else "sell"
-    verdict = RiskVerdict(
-        approved=True,
-        reject_reason=None,
-        side=side,
-        position_size_quote=_MOCK_POSITION_SIZE_QUOTE,
-        stop_loss_pct=_MOCK_STOP_LOSS_PCT,
-        take_profit_pct=_MOCK_TAKE_PROFIT_PCT,
+    settings = get_settings()
+    config = RiskConfig.from_settings(settings)
+    store = get_store()
+
+    asset = signal.asset or ""
+    ctx = RiskContext(
+        equity_quote=settings.starting_equity_quote,
+        trades_last_hour=await store.trades_last_hour(),
+        daily_pnl_quote=await store.daily_pnl(),
+        kill_switch_active=await store.get_kill_switch(),
+        asset_in_cooldown=await store.in_cooldown(asset),
+        open_position_on_asset=await store.has_open_position(asset),
     )
+
+    # Latch the kill switch on a daily-loss breach so it persists until reset.
+    if daily_loss_breached(ctx, config) and not ctx.kill_switch_active:
+        await store.set_kill_switch(True, reason="daily loss limit reached")
+
+    verdict = evaluate(signal, ctx, config)
     return {
         "risk": verdict,
         "status": "received" if verdict.approved else "rejected_risk",

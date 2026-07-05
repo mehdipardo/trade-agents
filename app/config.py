@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     asset_whitelist: str = "BTC/USDT,ETH/USDT,SOL/USDT,XRP/USDT,DOGE/USDT"
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
+    # --- Risk engine (see app/risk/rules.py) -----------------------------
+    min_intensity: int = Field(default=3, ge=1, le=5)
+    max_notional_abs: float = Field(default=100.0, gt=0)
+    max_notional_equity_pct: float = Field(default=0.05, gt=0, le=1)
+    stop_loss_pct: float = Field(default=1.5, gt=0)
+    take_profit_pct: float = Field(default=3.0, gt=0)
+    max_trades_per_hour: int = Field(default=6, ge=1)
+    cooldown_s: int = Field(default=900, ge=0)
+    daily_loss_limit_pct: float = Field(default=0.03, gt=0, le=1)
+    # Paper equity used until the exchange provides a real balance (Étape 5).
+    starting_equity_quote: float = Field(default=1000.0, gt=0)
+
     # --- Integrations ----------------------------------------------------
     slack_webhook_url: str = ""
     webhook_secret: str = "change-me"

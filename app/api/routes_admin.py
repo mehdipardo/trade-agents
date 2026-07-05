@@ -16,6 +16,7 @@ from app.ingestion.normalizer import normalize_payload
 from app.ingestion.simulator import list_scenarios, load_scenario
 from app.logging_config import get_logger
 from app.models.schemas import NewsEvent
+from app.services.store import get_store
 
 log = get_logger("app.api.admin")
 
@@ -96,3 +97,28 @@ async def inject(body: InjectRequest, request: Request) -> InjectResponse:
 async def scenarios() -> dict[str, list[str]]:
     """List the available demo scenarios."""
     return {"scenarios": list_scenarios()}
+
+
+class KillSwitchRequest(BaseModel):
+    """Body for ``POST /admin/killswitch``."""
+
+    active: bool = True
+    reason: str | None = None
+
+
+@router.post("/killswitch")
+async def killswitch(body: KillSwitchRequest) -> dict[str, Any]:
+    """Activate or reset the manual kill switch.
+
+    While active, the risk engine rejects every new trade until it is reset.
+    """
+    store = get_store()
+    await store.set_kill_switch(body.active, reason=body.reason or "manual")
+    log.info("killswitch_set", active=body.active, reason=body.reason)
+    return {"kill_switch": await store.get_kill_switch()}
+
+
+@router.get("/state")
+async def state() -> dict[str, Any]:
+    """Return a snapshot of the risk state (counters, positions, kill switch)."""
+    return await get_store().snapshot()
