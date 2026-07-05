@@ -1,0 +1,19 @@
+[project]
+name = "flashsentiment-trader"
+version = "0.0.0"
+description = "Event-driven agentic paper-trading backend (demo only)."
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-q"
+markers = [
+    "slow: end-to-end tests that hit external services (excluded from CI)",
+]

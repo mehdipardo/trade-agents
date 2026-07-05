@@ -1,0 +1,26 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Hard defaults so the safety guards hold even if .env is incomplete.
+      PAPER_TRADING: "true"
+      EXCHANGE_SANDBOX: "true"
+      REDIS_URL: "redis://redis:6379/0"
+    ports:
+      - "8000:8000"
