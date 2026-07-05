@@ -15,6 +15,7 @@ from typing import Any
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from app.api.ws import emit
 from app.config import get_settings
 from app.graph.state import TradingState
 from app.graph.timing import timed_node
@@ -85,6 +86,7 @@ async def _offline_fill(state: TradingState) -> dict[str, Any]:
     )
     await _record(symbol, side, price, amount)
     log.info("paper_fill", event_id=event.id, symbol=symbol, side=side, amount=amount)
+    await emit("order", event_id=event.id, payload=order.model_dump())
     return {"order": order, "status": "executed"}
 
 
@@ -127,6 +129,7 @@ async def _live_fill(state: TradingState, ex: ExchangeClient) -> dict[str, Any]:
     )
     await _record(symbol, side, float(avg_price or price), float(filled))
     log.info("live_fill", event_id=event.id, symbol=symbol, side=side, amount=order.amount)
+    await emit("order", event_id=event.id, payload=order.model_dump())
     return {"order": order, "status": "executed"}
 
 

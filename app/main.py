@@ -101,9 +101,11 @@ def create_app() -> FastAPI:
 
     from app.api.routes_admin import router as admin_router
     from app.api.routes_dashboard import router as dashboard_router
+    from app.api.ws import router as ws_router
 
     app.include_router(dashboard_router)
     app.include_router(admin_router)
+    app.include_router(ws_router)
 
     get_logger("app").info("app_created", app_env=settings.app_env)
     return app

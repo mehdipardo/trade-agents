@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.api.ws import emit
 from app.config import get_settings
 from app.graph.state import TradingState
 from app.graph.timing import timed_node
@@ -40,6 +41,7 @@ async def risk_node(state: TradingState) -> dict[str, Any]:
         await store.set_kill_switch(True, reason="daily loss limit reached")
 
     verdict = evaluate(signal, ctx, config)
+    await emit("risk_verdict", event_id=state["event"].id, payload=verdict.model_dump())
     return {
         "risk": verdict,
         "status": "received" if verdict.approved else "rejected_risk",

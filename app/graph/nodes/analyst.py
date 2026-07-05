@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.api.ws import emit
 from app.config import get_settings
 from app.graph.state import TradingState
 from app.graph.timing import timed_node
@@ -26,6 +27,7 @@ async def analyst_node(state: TradingState) -> dict[str, Any]:
         and signal.confidence >= settings.confidence_threshold
         and signal.asset is not None
     )
+    await emit("signal", event_id=state["event"].id, payload=signal.model_dump())
     return {
         "signal": signal,
         "status": "received" if tradable else "skipped_neutral",
