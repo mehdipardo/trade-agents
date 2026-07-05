@@ -157,6 +157,29 @@ def build_structured_llm(settings: Settings) -> Any | None:
     return llm.with_structured_output(Signal)
 
 
+def langfuse_callbacks(settings: Settings) -> list[Any]:
+    """Return Langfuse LangChain callbacks when configured, else an empty list.
+
+    Optional (Étape 9 stretch). Inert unless both Langfuse keys are set and the
+    ``langfuse`` package is installed; never raises.
+    """
+    if not (settings.langfuse_public_key and settings.langfuse_secret_key):
+        return []
+    try:
+        from langfuse.callback import CallbackHandler
+
+        return [
+            CallbackHandler(
+                public_key=settings.langfuse_public_key,
+                secret_key=settings.langfuse_secret_key,
+                host=settings.langfuse_host,
+            )
+        ]
+    except Exception as exc:  # noqa: BLE001 - tracing must never break analysis
+        log.warning("langfuse_unavailable", error=str(exc))
+        return []
+
+
 def _post_validate(signal: Signal, settings: Settings) -> Signal:
     """Enforce the asset whitelist in code (never trust the model)."""
     if signal.asset is not None and signal.asset not in settings.asset_whitelist_set:
@@ -172,10 +195,11 @@ async def _analyze_with_llm(event: NewsEvent, settings: Settings, structured_llm
         SystemMessage(content=system),
         HumanMessage(content=build_user_message(event)),
     ]
+    config = {"callbacks": langfuse_callbacks(settings)}
 
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
-            result = await structured_llm.ainvoke(messages)
+            result = await structured_llm.ainvoke(messages, config=config)
             signal = result if isinstance(result, Signal) else Signal.model_validate(result)
             return signal
         except (ValidationError, Exception) as exc:  # noqa: BLE001 - degrade gracefully

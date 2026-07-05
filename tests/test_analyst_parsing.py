@@ -32,7 +32,7 @@ class _FakeLLM:
     def __init__(self, responses: list) -> None:
         self._responses = list(responses)
 
-    async def ainvoke(self, messages):  # noqa: ANN001
+    async def ainvoke(self, messages, config=None):  # noqa: ANN001
         item = self._responses.pop(0)
         if isinstance(item, Exception):
             raise item

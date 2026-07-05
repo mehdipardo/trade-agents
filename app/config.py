@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     webhook_secret: str = "change-me"
     redis_url: str = "redis://localhost:6379/0"
 
+    # --- Observability (optional, Étape 9 stretch) -----------------------
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "http://localhost:3000"
+
     # --- Ingestion -------------------------------------------------------
     rss_feeds: str = ""
     rss_poll_interval_s: int = Field(default=30, ge=1)
