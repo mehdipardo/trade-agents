@@ -42,6 +42,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: startup and shutdown hooks."""
     import asyncio
 
+    from app.services.exchange import get_exchange, init_exchange
+    from app.services.position_monitor import position_monitor_loop
     from app.services.store import get_store, init_store
     from app.worker import create_queue, worker_loop
 
@@ -57,22 +59,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         llm_provider=settings.llm_provider,
     )
 
-    # State store (Redis with in-memory fallback). Later steps: init the
-    # exchange (sandbox) here too.
+    # State store (Redis with in-memory fallback) + exchange (sandbox forced,
+    # None in offline mode).
     await init_store(settings.redis_url)
+    await init_exchange(settings)
 
-    # Ingestion queue + single sequential worker.
+    # Ingestion queue + worker + SL/TP position monitor.
     app.state.queue = create_queue()
     worker_task = asyncio.create_task(worker_loop(app.state.queue), name="ingestion-worker")
+    monitor_task = asyncio.create_task(position_monitor_loop(), name="position-monitor")
 
     try:
         yield
     finally:
-        worker_task.cancel()
-        try:
-            await worker_task
-        except asyncio.CancelledError:
-            pass
+        for task in (worker_task, monitor_task):
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        exchange = get_exchange()
+        if exchange is not None:
+            await exchange.close()
         await get_store().close()
         log.info("shutdown")
 

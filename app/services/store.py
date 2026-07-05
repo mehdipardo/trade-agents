@@ -12,6 +12,8 @@ import time
 from datetime import UTC, datetime
 from typing import Protocol
 
+import orjson
+
 from app.logging_config import get_logger
 
 log = get_logger("app.services.store")
@@ -38,7 +40,10 @@ class Store(Protocol):
     async def record_trade(self, asset: str, cooldown_s: int) -> None: ...
     async def in_cooldown(self, asset: str) -> bool: ...
     async def has_open_position(self, asset: str) -> bool: ...
-    async def set_position(self, asset: str, is_open: bool) -> None: ...
+    async def set_position(
+        self, asset: str, is_open: bool, detail: dict | None = None
+    ) -> None: ...
+    async def open_positions(self) -> list[dict]: ...
 
     # Daily PnL
     async def daily_pnl(self) -> float: ...
@@ -58,7 +63,7 @@ class InMemoryStore:
         self._kill_reason: str | None = None
         self._trade_ts: list[float] = []
         self._cooldowns: dict[str, float] = {}  # asset -> expiry epoch
-        self._positions: set[str] = set()
+        self._positions: dict[str, dict] = {}  # asset -> position detail
         self._pnl: dict[str, float] = {}  # day -> pnl
         self._dedup: dict[str, float] = {}  # key -> expiry epoch
 
@@ -102,11 +107,14 @@ class InMemoryStore:
     async def has_open_position(self, asset: str) -> bool:
         return asset in self._positions
 
-    async def set_position(self, asset: str, is_open: bool) -> None:
+    async def set_position(self, asset: str, is_open: bool, detail: dict | None = None) -> None:
         if is_open:
-            self._positions.add(asset)
+            self._positions[asset] = {**(detail or {}), "asset": asset}
         else:
-            self._positions.discard(asset)
+            self._positions.pop(asset, None)
+
+    async def open_positions(self) -> list[dict]:
+        return list(self._positions.values())
 
     async def daily_pnl(self) -> float:
         return self._pnl.get(_utc_day(), 0.0)
@@ -178,13 +186,18 @@ class RedisStore:
         return bool(await self._r.exists(f"fst:cooldown:{asset}"))
 
     async def has_open_position(self, asset: str) -> bool:
-        return bool(await self._r.sismember("fst:positions", asset))
+        return bool(await self._r.hexists("fst:positions", asset))
 
-    async def set_position(self, asset: str, is_open: bool) -> None:
+    async def set_position(self, asset: str, is_open: bool, detail: dict | None = None) -> None:
         if is_open:
-            await self._r.sadd("fst:positions", asset)
+            payload = orjson.dumps({**(detail or {}), "asset": asset}).decode()
+            await self._r.hset("fst:positions", asset, payload)
         else:
-            await self._r.srem("fst:positions", asset)
+            await self._r.hdel("fst:positions", asset)
+
+    async def open_positions(self) -> list[dict]:
+        raw = await self._r.hgetall("fst:positions")
+        return [orjson.loads(v) for v in raw.values()]
 
     async def daily_pnl(self) -> float:
         val = await self._r.get(f"fst:pnl:{_utc_day()}")
@@ -207,7 +220,7 @@ class RedisStore:
             "kill_switch": await self.get_kill_switch(),
             "kill_reason": reason or None,
             "trades_last_hour": await self.trades_last_hour(),
-            "open_positions": sorted(await self._r.smembers("fst:positions")),
+            "open_positions": sorted(await self._r.hkeys("fst:positions")),
             "daily_pnl": await self.daily_pnl(),
         }
 

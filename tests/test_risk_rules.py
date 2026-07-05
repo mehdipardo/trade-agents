@@ -80,8 +80,9 @@ def test_notional_cap_equity_pct_applies() -> None:
     assert v.position_size_quote == pytest.approx(20.0)
 
 
-def test_bear_with_open_position_closes() -> None:
-    v = evaluate(make_signal(sentiment="BEAR"), make_ctx(open_position_on_asset=True), CONFIG)
+def test_bear_opens_short() -> None:
+    # Futures: BEAR with no open position opens a short (sell).
+    v = evaluate(make_signal(sentiment="BEAR"), make_ctx(open_position_on_asset=False), CONFIG)
     assert v.approved
     assert v.side == "sell"
 
@@ -138,16 +139,12 @@ def test_reject_cooldown() -> None:
     assert "cooldown" in v.reject_reason
 
 
-def test_reject_position_already_open_on_bull() -> None:
-    v = evaluate(make_signal(sentiment="BULL"), make_ctx(open_position_on_asset=True), CONFIG)
+@pytest.mark.parametrize("sentiment", ["BULL", "BEAR"])
+def test_reject_position_already_open(sentiment: str) -> None:
+    # One position per asset in either direction blocks a new entry.
+    v = evaluate(make_signal(sentiment=sentiment), make_ctx(open_position_on_asset=True), CONFIG)
     assert not v.approved
     assert "already open" in v.reject_reason
-
-
-def test_reject_bear_no_short_on_spot() -> None:
-    v = evaluate(make_signal(sentiment="BEAR"), make_ctx(open_position_on_asset=False), CONFIG)
-    assert not v.approved
-    assert "no short on spot" in v.reject_reason
 
 
 # --- Ordering / helpers ---------------------------------------------------

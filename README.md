@@ -93,3 +93,21 @@ Development follows the incremental roadmap in the project brief (Étape 0 →
 
 - **Étape 0 — Scaffold** ✅ config + safety guards, structured logging,
   `GET /api/health`, Dockerfile + docker-compose.
+- **Étape 1 — Schemas + simulator** ✅ models, 5 demo scenarios, normalizer,
+  `POST /admin/inject`, asyncio queue + worker.
+- **Étape 2 — Mock graph** ✅ LangGraph topology, timed nodes, conditional edges.
+- **Étape 3 — LLM analyst** ✅ structured output + retry + NEUTRAL fallback,
+  prompt-injection defense, honest offline classifier when key-less.
+- **Étape 4 — Risk engine** ✅ pure deterministic rules, Redis/in-memory store,
+  kill switch, `/admin/killswitch` + `/admin/state`.
+- **Étape 5 — Executor** ✅ CCXT **futures** sandbox (shorts supported),
+  idempotent orders, SL/TP position monitor; offline paper fill when key-less.
+
+## Exchange: futures testnet (shorts)
+
+The agents must be able to **short**, which spot markets cannot do, so the
+executor targets a **futures/perpetuals testnet**. Binance Futures is
+geo-blocked in France, so the default is **Kraken Futures** (CCXT
+`krakenfutures`, demo environment via `set_sandbox_mode(True)`); **MEXC** is a
+supported alternative. Use **testnet keys with no withdrawal rights**. Without
+keys the executor runs an **offline paper fill** so the full demo still works.

@@ -6,8 +6,8 @@ returns a ``RiskVerdict``. All side effects (reading/writing counters, the kill
 switch) live in the caller. This purity is what makes the module exhaustively
 testable — the "production-grade" argument of the demo.
 
-Spot-testnet constraint: no shorting. A BEAR signal can only ever *close* an
-existing long; with no open position it is rejected.
+Futures-testnet model: shorting is allowed. BULL opens a long (buy), BEAR opens
+a short (sell); one position per asset in either direction.
 """
 
 from __future__ import annotations
@@ -111,15 +111,12 @@ def evaluate(signal: Signal, ctx: RiskContext, config: RiskConfig) -> RiskVerdic
     if ctx.asset_in_cooldown:
         return _reject("asset in cooldown")
 
-    # --- Side resolution (spot: no short) --------------------------------
-    if signal.sentiment == "BULL":
-        if ctx.open_position_on_asset:  # already at max 1 position/asset
-            return _reject("position already open on asset")
-        side: str = "buy"
-    else:  # BEAR
-        if not ctx.open_position_on_asset:
-            return _reject("no short on spot; no position to close")
-        side = "sell"  # close the existing long
+    # --- Side resolution (futures: shorts allowed) -----------------------
+    # One position per asset, in either direction. BULL opens a long (buy),
+    # BEAR opens a short (sell). SL/TP exits are handled by the position monitor.
+    if ctx.open_position_on_asset:
+        return _reject("position already open on asset")
+    side = "buy" if signal.sentiment == "BULL" else "sell"
 
     # --- Sizing ----------------------------------------------------------
     size = _position_size_quote(signal.intensity, ctx, config)
