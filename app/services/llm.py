@@ -19,7 +19,6 @@ from __future__ import annotations
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import ValidationError
 
 from app.config import Settings
 from app.logging_config import get_logger
@@ -202,7 +201,7 @@ async def _analyze_with_llm(event: NewsEvent, settings: Settings, structured_llm
             result = await structured_llm.ainvoke(messages, config=config)
             signal = result if isinstance(result, Signal) else Signal.model_validate(result)
             return signal
-        except (ValidationError, Exception) as exc:  # noqa: BLE001 - degrade gracefully
+        except Exception as exc:  # noqa: BLE001 - degrade gracefully (incl. ValidationError)
             log.warning("analyst_attempt_failed", attempt=attempt, error=str(exc))
             messages.append(
                 HumanMessage(

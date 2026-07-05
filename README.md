@@ -1,5 +1,7 @@
 # FlashSentiment Trader — Backend
 
+![CI](https://github.com/mehdipardo/trade-agents/actions/workflows/ci.yml/badge.svg)
+
 Event-driven **agentic** trading backend: a news event enters (webhook, RSS, or
 scenario injection) → an LLM analyst classifies it (sentiment, intensity, asset)
 → a deterministic risk engine approves or vetoes → an order is placed on a crypto
@@ -60,13 +62,19 @@ PAPER_TRADING=false uvicorn app.main:app
 #   - PAPER_TRADING must be 'true'. ...
 ```
 
-## Tests
+## Tests & dev
 
 ```bash
-pip install -r requirements-dev.txt
-ruff check .
-pytest -m "not slow"
+make install      # dev dependencies
+make lint         # ruff
+make test         # pytest -m "not slow"
+make eval         # analyst golden-set evaluation (CI gate)
+make run          # uvicorn --reload
+make up           # docker compose up (app + redis)
 ```
+
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs ruff, the test suite, and
+the golden-set eval gate on every push/PR to `main`.
 
 ## Project layout
 

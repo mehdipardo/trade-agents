@@ -13,9 +13,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import pathlib
 import sys
 
-from app.eval.runner import format_report, run_eval
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
+from app.eval.runner import format_report, run_eval  # noqa: E402
 
 
 async def _main(min_accuracy: float) -> int:

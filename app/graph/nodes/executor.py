@@ -45,7 +45,12 @@ def client_order_id(event_id: str) -> str:
 
 
 def _position_detail(symbol: str, side: str, entry_price: float, amount: float) -> dict:
+    from app.services.position_monitor import sl_tp_prices
+
     settings = get_settings()
+    sl_price, tp_price = sl_tp_prices(
+        side, entry_price, settings.stop_loss_pct, settings.take_profit_pct
+    )
     return {
         "symbol": symbol,
         "side": side,  # buy = long, sell = short
@@ -53,6 +58,8 @@ def _position_detail(symbol: str, side: str, entry_price: float, amount: float) 
         "amount": amount,
         "stop_loss_pct": settings.stop_loss_pct,
         "take_profit_pct": settings.take_profit_pct,
+        "stop_loss_price": round(sl_price, 8),
+        "take_profit_price": round(tp_price, 8),
         "opened_at": datetime.now(UTC).isoformat(),
     }
 

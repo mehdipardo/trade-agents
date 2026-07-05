@@ -116,3 +116,22 @@ def test_realized_pnl_long_and_short() -> None:
     assert realized_pnl("buy", 100.0, 110.0, 2.0) == pytest.approx(20.0)
     assert realized_pnl("sell", 100.0, 90.0, 2.0) == pytest.approx(20.0)
     assert realized_pnl("sell", 100.0, 110.0, 2.0) == pytest.approx(-20.0)
+
+
+def test_sl_tp_prices_long_and_short() -> None:
+    from app.services.position_monitor import sl_tp_prices
+
+    sl, tp = sl_tp_prices("buy", 100.0, 1.5, 3.0)
+    assert sl == pytest.approx(98.5)
+    assert tp == pytest.approx(103.0)
+    sl, tp = sl_tp_prices("sell", 100.0, 1.5, 3.0)
+    assert sl == pytest.approx(101.5)
+    assert tp == pytest.approx(97.0)
+
+
+async def test_offline_fill_records_sl_tp_levels() -> None:
+    await executor_node(_state("buy"))
+    positions = await get_store().open_positions()
+    assert positions
+    p = positions[0]
+    assert "stop_loss_price" in p and "take_profit_price" in p

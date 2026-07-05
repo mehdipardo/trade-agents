@@ -39,6 +39,15 @@ def exit_reason(
     return None
 
 
+def sl_tp_prices(
+    side: str, entry_price: float, sl_pct: float, tp_pct: float
+) -> tuple[float, float]:
+    """Absolute (stop_loss, take_profit) price levels for a long/short."""
+    if side == "buy":  # long
+        return entry_price * (1 - sl_pct / 100), entry_price * (1 + tp_pct / 100)
+    return entry_price * (1 + sl_pct / 100), entry_price * (1 - tp_pct / 100)
+
+
 def realized_pnl(side: str, entry_price: float, exit_price: float, amount: float) -> float:
     """Realized quote PnL for closing a position."""
     if side == "buy":
