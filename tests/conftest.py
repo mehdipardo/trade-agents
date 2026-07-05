@@ -19,16 +19,18 @@ def _safe_defaults(monkeypatch: pytest.MonkeyPatch):
     from app.config import get_settings
     from app.services.exchange import set_exchange
     from app.services.store import InMemoryStore, set_store
-    from app.sources import catalog, watcher
+    from app.sources import catalog, truth_social, watcher
 
     get_settings.cache_clear()
     set_store(InMemoryStore())
     set_exchange(None)
     catalog.reset_state()
     watcher.reset_state()
+    truth_social.reset_state()
     yield
     get_settings.cache_clear()
     set_store(None)
     set_exchange(None)
     catalog.reset_state()
     watcher.reset_state()
+    truth_social.reset_state()

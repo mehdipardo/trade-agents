@@ -93,6 +93,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
         )
 
+    # Trump / Truth Social poller (opt-in: only when a feed URL is set).
+    if settings.truth_social_url:
+        from app.sources.truth_social import poll_loop as truth_poll_loop
+
+        tasks.append(
+            asyncio.create_task(
+                truth_poll_loop(
+                    app.state.queue,
+                    settings.truth_social_url,
+                    settings.truth_social_poll_interval_s,
+                ),
+                name="truth-poller",
+            )
+        )
+
     try:
         yield
     finally:

@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     rss_poll_interval_s: int = Field(default=30, ge=1)
     # Economic-calendar watcher (opt-in: set a feed URL to start it).
     econ_calendar_url: str = ""
+    # Trump / Truth Social poller (opt-in: set a statuses feed URL to start it).
+    truth_social_url: str = ""
+    truth_social_poll_interval_s: int = Field(default=10, ge=2)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
