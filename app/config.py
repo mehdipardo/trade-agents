@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     # --- Ingestion -------------------------------------------------------
     rss_feeds: str = ""
     rss_poll_interval_s: int = Field(default=30, ge=1)
+    # Economic-calendar watcher (opt-in: set a feed URL to start it).
+    econ_calendar_url: str = ""
 
     @computed_field  # type: ignore[prop-decorator]
     @property

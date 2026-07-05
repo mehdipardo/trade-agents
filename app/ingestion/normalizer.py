@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from app.models.schemas import NewsEvent
 
-Source = Literal["webhook", "rss", "simulator"]
+Source = Literal["webhook", "rss", "simulator", "social", "economic", "regulatory"]
 
 # Field aliases accepted from arbitrary payloads, in priority order.
 _TITLE_KEYS = ("title", "headline", "subject")

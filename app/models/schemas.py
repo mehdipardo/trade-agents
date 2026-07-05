@@ -28,7 +28,7 @@ class NewsEvent(BaseModel):
     """A single, normalized inbound news event."""
 
     id: str  # uuid4 or a hash provided by the source
-    source: Literal["webhook", "rss", "simulator"]
+    source: Literal["webhook", "rss", "simulator", "social", "economic", "regulatory"]
     author: str | None = None
     title: str
     content: str = ""

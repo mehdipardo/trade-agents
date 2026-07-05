@@ -82,6 +82,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
         )
 
+    # Economic-calendar release watcher (opt-in: only when a feed URL is set).
+    if settings.econ_calendar_url:
+        from app.sources.watcher import watcher_loop
+
+        tasks.append(
+            asyncio.create_task(
+                watcher_loop(app.state.queue, settings.econ_calendar_url),
+                name="econ-watcher",
+            )
+        )
+
     try:
         yield
     finally:
@@ -114,12 +125,14 @@ def create_app() -> FastAPI:
 
     from app.api.routes_admin import router as admin_router
     from app.api.routes_dashboard import router as dashboard_router
+    from app.api.routes_sources import router as sources_router
     from app.api.routes_webhooks import router as webhooks_router
     from app.api.ws import router as ws_router
 
     app.include_router(dashboard_router)
     app.include_router(admin_router)
     app.include_router(webhooks_router)
+    app.include_router(sources_router)
     app.include_router(ws_router)
 
     get_logger("app").info("app_created", app_env=settings.app_env)

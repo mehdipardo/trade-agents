@@ -66,6 +66,37 @@ Responsive: on narrow screens the cockpit grid collapses to one column; the hero
 pipeline becomes vertical or horizontally scrollable (never let the page scroll
 sideways).
 
+## 4b. Sources & Calendar (curated catalog — added)
+
+The platform no longer relies on operator-pasted URLs. It ships a **curated
+catalog** of vetted live sources, selectable from the UI, plus a **calendar view**
+for scheduled macro events. Two new surfaces to design (a second view or a
+slide-over panel is fine; keep the pipeline+cockpit as the home screen):
+
+### Sources panel
+- A grid/list of catalog cards, each: name, **kind** badge (economic / social /
+  regulatory / news), a one-line description, a **cost** chip (free/freemium/paid),
+  an honest **reactivity** label (e.g. "scheduled → ~1–2s", "~seconds (fragile)"),
+  optional caveat note, and an **on/off toggle**.
+- Data: `GET /api/sources` → `[{id,name,kind,description,cost,reactivity,notes,
+  tags,enabled}]`; toggle via `POST /admin/sources/{id}/toggle {enabled}`.
+- Seed content: Economic calendar (recommended, on by default), Trump / Truth
+  Social (live, fragile), SEC press & litigation, US Congress tracked bills
+  (CLARITY/GENIUS), crypto news baseline.
+
+### Calendar view (economic events)
+- **Upcoming macro events ranked by expected volatility** (NFP/CPI/FOMC = 5).
+  Each row: title, currency/country, **volatility 1–5** (show as a meter or
+  ★-style), scheduled time + countdown, forecast/previous, and an **"Arm"** toggle.
+- "Armed" = the system pre-positions a watcher that captures the print within
+  ~1–2 s of release and fires it into the pipeline (this is the demo's strongest,
+  free reactivity story — make armed events feel special: a subtle "primed" state).
+- Data: `GET /api/calendar/upcoming?min_volatility=` → `[{id,title,currency,when,
+  impact,volatility,forecast,previous,actual,armed}]`; arm via
+  `POST /admin/calendar/arm {event_id,armed}`.
+- When an armed event releases, it flows through the **same hero pipeline** — the
+  UI should visibly connect "armed calendar event → pipeline fires".
+
 ## 5. Component specs
 
 ### 5.1 Hero — animated pipeline (the centerpiece)
