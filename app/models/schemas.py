@@ -28,7 +28,9 @@ class NewsEvent(BaseModel):
     """A single, normalized inbound news event."""
 
     id: str  # uuid4 or a hash provided by the source
-    source: Literal["webhook", "rss", "simulator", "social", "economic", "regulatory"]
+    source: Literal[
+        "webhook", "rss", "simulator", "social", "economic", "regulatory", "news"
+    ]
     author: str | None = None
     title: str
     content: str = ""
@@ -46,6 +48,9 @@ class Signal(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     rationale: str = Field(max_length=250)
     event_type: EventType
+    # How cleanly this maps to a directional trade on the mapped asset (ease to
+    # long/short): 1 = vague/no clean trade, 5 = obvious directional trade.
+    actionability: int = Field(default=3, ge=1, le=5)
 
 
 class RiskVerdict(BaseModel):

@@ -19,7 +19,7 @@ def _safe_defaults(monkeypatch: pytest.MonkeyPatch):
     from app.config import get_settings
     from app.services.exchange import set_exchange
     from app.services.store import InMemoryStore, set_store
-    from app.sources import catalog, congress, truth_social, watcher
+    from app.sources import aggregator, catalog, congress, truth_social, watcher
 
     get_settings.cache_clear()
     set_store(InMemoryStore())
@@ -28,6 +28,7 @@ def _safe_defaults(monkeypatch: pytest.MonkeyPatch):
     watcher.reset_state()
     truth_social.reset_state()
     congress.reset_state()
+    aggregator.reset_state()
     yield
     get_settings.cache_clear()
     set_store(None)
@@ -36,3 +37,4 @@ def _safe_defaults(monkeypatch: pytest.MonkeyPatch):
     watcher.reset_state()
     truth_social.reset_state()
     congress.reset_state()
+    aggregator.reset_state()

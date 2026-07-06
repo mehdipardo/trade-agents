@@ -23,6 +23,7 @@ class RiskConfig:
 
     confidence_threshold: float = 0.6
     min_intensity: int = 3
+    min_actionability: int = 2
     # Fraction of equity to risk per intensity bucket.
     sizing_by_intensity: dict[int, float] = field(
         default_factory=lambda: {3: 0.01, 4: 0.02, 5: 0.03}
@@ -42,6 +43,7 @@ class RiskConfig:
         return cls(
             confidence_threshold=settings.confidence_threshold,  # type: ignore[attr-defined]
             min_intensity=settings.min_intensity,  # type: ignore[attr-defined]
+            min_actionability=settings.min_actionability,  # type: ignore[attr-defined]
             max_notional_abs=settings.max_notional_abs,  # type: ignore[attr-defined]
             max_notional_equity_pct=settings.max_notional_equity_pct,  # type: ignore[attr-defined]
             stop_loss_pct=settings.stop_loss_pct,  # type: ignore[attr-defined]
@@ -104,6 +106,10 @@ def evaluate(signal: Signal, ctx: RiskContext, config: RiskConfig) -> RiskVerdic
         )
     if signal.intensity < config.min_intensity:
         return _reject(f"intensity {signal.intensity} < min {config.min_intensity}")
+    if signal.actionability < config.min_actionability:
+        return _reject(
+            f"actionability {signal.actionability} < min {config.min_actionability}"
+        )
 
     # --- Throughput / concurrency limits ---------------------------------
     if ctx.trades_last_hour >= config.max_trades_per_hour:

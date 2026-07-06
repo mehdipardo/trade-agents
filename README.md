@@ -21,6 +21,38 @@ scenario injection) → an LLM analyst classifies it (sentiment, intensity, asse
 - API keys come only from the environment and are never logged. Use **testnet
   keys with no withdrawal permissions**.
 
+## Going live — one step
+
+Everything is pre-wired. To go from the offline demo to real analysis:
+
+```bash
+cp .env.example .env
+# edit .env: paste a free Groq key into GROQ_API_KEY=...
+docker compose up --build      # or: uvicorn app.main:app
+```
+
+`.env.example` already ships the **news firehose** (`AGGREGATOR_SSE_URL`, 200+
+outlets via SSE, no key) and the **economic calendar** (`ECON_CALENDAR_URL`, free)
+enabled. Without a Groq key the pipeline runs on a deterministic offline
+classifier; **adding the key switches on the real LLM analyst** — nothing else to
+configure. Exchange keys (Kraken Futures demo / MEXC) are only needed for live
+testnet orders; without them, orders are offline paper fills.
+
+## LLM funnel (why constant monitoring stays cheap)
+
+The analyst is the core of the system. Because a live firehose is mostly noise,
+cost is controlled with a funnel:
+
+1. **Free relevance pre-filter** — drops items with no whitelisted asset / macro
+   signal before any LLM call.
+2. **LLM analyst** (Groq by default — fastest inference, free tier) — one
+   structured call producing `{sentiment, intensity, asset, confidence,
+   rationale, event_type, actionability}`.
+
+`actionability` (1–5) captures how cleanly the news maps to a directional
+long/short on a specific asset (e.g. "Strategy sold 3,588 BTC" → short BTC = 5);
+the risk engine can gate on it (`MIN_ACTIONABILITY`).
+
 ## Requirements
 
 - Python 3.11+

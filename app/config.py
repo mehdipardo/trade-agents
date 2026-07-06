@@ -55,6 +55,7 @@ class Settings(BaseSettings):
 
     # --- Risk engine (see app/risk/rules.py) -----------------------------
     min_intensity: int = Field(default=3, ge=1, le=5)
+    min_actionability: int = Field(default=2, ge=1, le=5)
     max_notional_abs: float = Field(default=100.0, gt=0)
     max_notional_equity_pct: float = Field(default=0.05, gt=0, le=1)
     stop_loss_pct: float = Field(default=1.5, gt=0)
@@ -78,6 +79,9 @@ class Settings(BaseSettings):
     # --- Ingestion -------------------------------------------------------
     rss_feeds: str = ""
     rss_poll_interval_s: int = Field(default=30, ge=1)
+    # Broad real-time news aggregator (free-crypto-news SSE stream). This is the
+    # primary firehose; the LLM funnel triages it. Opt-in: set the SSE URL.
+    aggregator_sse_url: str = ""
     # Economic-calendar watcher (opt-in: set a feed URL to start it).
     econ_calendar_url: str = ""
     # Trump / Truth Social poller (opt-in: set a statuses feed URL to start it).

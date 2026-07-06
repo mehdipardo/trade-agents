@@ -16,6 +16,7 @@ calls. This is clearly logged and is NOT presented as real analysis.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -42,8 +43,15 @@ _INJECTION_MARKERS = (
     "output bull",
     "output bear",
 )
-_BULL_KEYWORDS = ("reserve", "approve", "approval", "etf", "adopt", "capital", "partnership")
-_BEAR_KEYWORDS = ("cpi", "inflation", "hack", "ban", "lawsuit", "crash", "denied", "hawkish")
+_BULL_KEYWORDS = (
+    "reserve", "approve", "approval", "etf", "adopt", "capital", "partnership",
+    "buys", "accumulat", "rally", "surge", "inflow",
+)
+_BEAR_KEYWORDS = (
+    "cpi", "inflation", "hack", "ban", "lawsuit", "crash", "denied", "hawkish",
+    # Past-tense/specific verbs avoid negation collisions like "never sell".
+    "sold", "dump", "offload", "liquidat", "outflow", "plunge",
+)
 _ASSET_KEYWORDS = {
     "solana": "SOL/USDT",
     "sol": "SOL/USDT",
@@ -57,6 +65,14 @@ _ASSET_KEYWORDS = {
     "btc": "BTC/USDT",
 }
 
+# Relevance pre-filter (funnel stage 1, free): terms that signal a plausibly
+# tradable/market-moving item. If none appear, we skip the LLM entirely.
+_MACRO_KEYWORDS = (
+    "fed", "fomc", "cpi", "inflation", "rate", "rates", "jobs", "payroll", "nfp",
+    "tariff", "sec", "regulat", "etf", "crypto", "bitcoin", "ether", "treasury",
+    "sanction", "gdp", "unemployment", "stablecoin",
+)
+
 
 def neutral_fallback(reason: str = "analysis failed") -> Signal:
     """The safe default signal emitted when analysis cannot be trusted."""
@@ -67,7 +83,20 @@ def neutral_fallback(reason: str = "analysis failed") -> Signal:
         confidence=0.0,
         rationale=reason[:250],
         event_type="other",
+        actionability=1,
     )
+
+
+def is_relevant(event: NewsEvent, settings: Settings) -> bool:
+    """Cheap free gate: does this news plausibly concern a tradable asset/macro?
+
+    Funnel stage 1 — drops obvious noise before any (paid) LLM call, which is
+    what makes constant monitoring economical.
+    """
+    text = f"{event.title}\n{event.content}".lower()
+    if any(k in text for k in _ASSET_KEYWORDS):
+        return True
+    return any(k in text for k in _MACRO_KEYWORDS)
 
 
 def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
@@ -83,6 +112,7 @@ def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
             confidence=0.9,
             rationale="Content appears to be a manipulation attempt; no real market impact.",
             event_type="other",
+            actionability=1,
         )
 
     is_bull = any(k in text for k in _BULL_KEYWORDS)
@@ -95,17 +125,22 @@ def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
             confidence=0.5,
             rationale="No clear tradable catalyst detected (offline classifier).",
             event_type="other",
+            actionability=1,
         )
 
     asset: str | None = None
     for keyword, symbol in _ASSET_KEYWORDS.items():
-        if keyword in text and symbol in whitelist:
+        # Word-boundary match so short tickers don't match inside other words
+        # (e.g. "sol" must not match "sold").
+        if re.search(rf"\b{keyword}\b", text) and symbol in whitelist:
             asset = symbol
             break
     if asset is None and "BTC/USDT" in whitelist:
         asset = "BTC/USDT"  # broad macro/crypto-wide -> BTC
 
     sentiment = "BULL" if is_bull else "BEAR"
+    # Clean directional trade when we mapped a concrete asset, else weaker.
+    actionability = 4 if asset is not None else 1
     return Signal(
         sentiment=sentiment,
         intensity=4,
@@ -113,6 +148,7 @@ def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
         confidence=0.8,
         rationale=f"Offline keyword classification -> {sentiment}.",
         event_type="macro" if is_bear else "social",
+        actionability=actionability,
     )
 
 
@@ -226,6 +262,12 @@ async def analyze(event: NewsEvent, settings: Settings, *, llm: Any = _UNSET) ->
             built from settings; if none is available the offline classifier
             is used.
     """
+    # Funnel stage 1 (free): skip the LLM entirely on obvious noise. Only on the
+    # auto path (an explicitly injected llm bypasses the gate for testing).
+    if llm is _UNSET and not is_relevant(event, settings):
+        log.info("analyst_prefiltered", event_id=event.id)
+        return neutral_fallback("filtered by relevance pre-filter")
+
     structured_llm = build_structured_llm(settings) if llm is _UNSET else llm
 
     if structured_llm is None:

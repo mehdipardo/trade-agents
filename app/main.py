@@ -82,6 +82,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
         )
 
+    # Broad news aggregator firehose (opt-in: only when an SSE URL is set).
+    if settings.aggregator_sse_url:
+        from app.sources.aggregator import stream_loop as aggregator_stream
+
+        tasks.append(
+            asyncio.create_task(
+                aggregator_stream(app.state.queue, settings.aggregator_sse_url),
+                name="aggregator-stream",
+            )
+        )
+
     # Economic-calendar release watcher (opt-in: only when a feed URL is set).
     if settings.econ_calendar_url:
         from app.sources.watcher import watcher_loop

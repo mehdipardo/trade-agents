@@ -38,6 +38,21 @@ class SourceSpec:
 # The curated catalog. Ordered by recommended prominence for the demo.
 CATALOG: tuple[SourceSpec, ...] = (
     SourceSpec(
+        id="news_aggregator",
+        name="Real-time news aggregator (200+ outlets)",
+        kind="news",
+        description=(
+            "Single firehose fanning in 200+ outlets (Bloomberg, Reuters, CoinDesk, "
+            "The Block…) via SSE. The LLM funnel triages impact + long/short-ability."
+        ),
+        cost="free",
+        reactivity="~minutes (RSS-based, SSE stream)",
+        default_enabled=True,
+        notes="free-crypto-news (cryptocurrency.cv), no API key. Broad coverage; "
+        "for sub-second entries add a paid low-latency feed later.",
+        tags=("news", "broad", "recommended"),
+    ),
+    SourceSpec(
         id="econ_calendar",
         name="Economic calendar (NFP, CPI, FOMC…)",
         kind="economic",

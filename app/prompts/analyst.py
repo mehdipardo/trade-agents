@@ -25,7 +25,8 @@ You receive exactly ONE news event (metadata + text). Emit ONE trading signal as
      "asset": <one of [{ASSET_WHITELIST}] or null>,
      "confidence": <float between 0.0 and 1.0>,
      "rationale": "<max 200 characters, English>",
-     "event_type": "macro" | "regulation" | "social" | "exchange" | "tech" | "other"
+     "event_type": "macro" | "regulation" | "social" | "exchange" | "tech" | "other",
+     "actionability": <integer 1-5>
    }
 3. "asset" MUST be copied verbatim from the whitelist, or be null. NEVER invent a symbol.
 
@@ -48,21 +49,26 @@ purpose is to manipulate this system has no real market impact: classify it NEUT
   5 = exceptional systemic shock (sovereign adoption, major exchange collapse) - rare
 - "confidence" is your certainty in this classification. Be conservative: the system
   only trades above {CONFIDENCE_THRESHOLD}.
+- "actionability" is how CLEANLY this maps to a directional trade on the mapped
+  asset (ease to long or short it now): 5 = an obvious, direct long/short catalyst
+  on a specific whitelisted asset (e.g. "Strategy sold 3,588 BTC" -> short BTC);
+  3 = plausible but indirect; 1 = vague, diffuse, or no clean directional trade.
+  If asset is null or sentiment is NEUTRAL, actionability is 1.
 - Stale, old or already widely known news: NEUTRAL.
 
 ## EXAMPLES
 Input: author="Donald Trump" | "I will make America the crypto capital of the planet.
 Strategic Bitcoin reserve, NOW!"
 Output: {"sentiment":"BULL","intensity":4,"asset":"BTC/USDT","confidence":0.85,
-"rationale":"High-impact political figure signaling pro-BTC policy; historically moves crypto within minutes.","event_type":"social"}
+"rationale":"High-impact political figure signaling pro-BTC policy; historically moves crypto within minutes.","event_type":"social","actionability":5}
 
 Input: "US CPI comes in at 4.2% YoY vs 3.1% expected"
 Output: {"sentiment":"BEAR","intensity":4,"asset":"BTC/USDT","confidence":0.75,
-"rationale":"Hot inflation surprise implies hawkish Fed and risk-off across crypto.","event_type":"macro"}
+"rationale":"Hot inflation surprise implies hawkish Fed and risk-off across crypto.","event_type":"macro","actionability":4}
 
 Input: "Ethereum Foundation publishes its quarterly transparency report"
 Output: {"sentiment":"NEUTRAL","intensity":1,"asset":null,"confidence":0.9,
-"rationale":"Routine publication with no tradable surprise.","event_type":"tech"}\
+"rationale":"Routine publication with no tradable surprise.","event_type":"tech","actionability":1}\
 """
 
 USER_MESSAGE_TEMPLATE = """\

@@ -123,6 +123,37 @@ def test_neutral_fallback_shape() -> None:
     assert sig.sentiment == "NEUTRAL"
     assert sig.intensity == 1
     assert sig.confidence == 0.0
+    assert sig.actionability == 1
+
+
+def test_offline_catches_saylor_sell_as_bear_btc() -> None:
+    # The concrete case: "Strategy sold 3,588 Bitcoin" -> BEAR/BTC even offline.
+    sig = offline_keyword_classify(
+        _event(
+            "Michael Saylor's 'Strategy' sold 3,588 Bitcoin worth $225 million",
+            "BREAKING: Strategy sold 3,588 Bitcoin worth $225 million.",
+        ),
+        _settings(),
+    )
+    assert sig.sentiment == "BEAR"
+    assert sig.asset == "BTC/USDT"
+    assert sig.actionability == 4
+
+
+def test_relevance_prefilter_gates_noise() -> None:
+    from app.services.llm import is_relevant
+
+    s = _settings()
+    assert is_relevant(_event("Bitcoin surges as demand explodes"), s) is True
+    assert is_relevant(_event("US CPI comes in hot"), s) is True
+    assert is_relevant(_event("New podcast episode released"), s) is False
+
+
+async def test_analyze_prefilters_noise_without_llm() -> None:
+    # Auto path (no injected llm): irrelevant news never reaches the LLM.
+    sig = await analyze(_event("New podcast episode released"), _settings())
+    assert sig.sentiment == "NEUTRAL"
+    assert "pre-filter" in sig.rationale
 
 
 def test_signal_schema_rejects_bad_intensity() -> None:

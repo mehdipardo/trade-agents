@@ -15,6 +15,7 @@ def make_signal(
     intensity: int = 4,
     asset: str | None = "BTC/USDT",
     confidence: float = 0.9,
+    actionability: int = 4,
 ) -> Signal:
     return Signal(
         sentiment=sentiment,  # type: ignore[arg-type]
@@ -23,6 +24,7 @@ def make_signal(
         confidence=confidence,
         rationale="test",
         event_type="macro",
+        actionability=actionability,
     )
 
 
@@ -113,6 +115,12 @@ def test_reject_low_intensity() -> None:
     v = evaluate(make_signal(intensity=2), make_ctx(), CONFIG)
     assert not v.approved
     assert "intensity" in v.reject_reason
+
+
+def test_reject_low_actionability() -> None:
+    v = evaluate(make_signal(actionability=1), make_ctx(), CONFIG)
+    assert not v.approved
+    assert "actionability" in v.reject_reason
 
 
 def test_reject_no_asset() -> None:
