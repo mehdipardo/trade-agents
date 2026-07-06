@@ -1,0 +1,30 @@
+# Reverse proxy + static dashboard for the FlashSentiment Trader demo.
+# Replace the hostname if you point a custom domain at the VPS.
+# Caddy obtains and renews HTTPS certificates automatically (Let's Encrypt),
+# because srv1278524.hstgr.cloud already resolves to this VPS.
+
+srv1278524.hstgr.cloud {
+	encode zstd gzip
+
+	# Backend: API, WebSocket, admin and webhooks go to the FastAPI app.
+	@backend path /api/* /ws/* /admin/* /webhooks/*
+	handle @backend {
+		reverse_proxy app:8000
+	}
+
+	# Everything else: serve the dashboard (single-page app).
+	handle {
+		root * /srv/www
+		try_files {path} /index.html
+		file_server
+	}
+
+	# --- OPTIONAL: protect the admin endpoints behind basic auth ----------
+	# For a public demo you may want to lock /admin (kill switch, inject).
+	# Generate a hash with: docker run caddy caddy hash-password --plaintext 'yourpass'
+	# then uncomment:
+	# @admin path /admin/*
+	# basic_auth @admin {
+	#     demo <PASTE_BCRYPT_HASH_HERE>
+	# }
+}

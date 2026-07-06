@@ -1,0 +1,50 @@
+# Production stack for the VPS: backend + redis + Caddy (HTTPS + dashboard).
+# Usage on the VPS:
+#   cp .env.example .env   # then paste your Groq key into GROQ_API_KEY
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Then open https://srv1278524.hstgr.cloud
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Hard defaults so the safety guards always hold.
+      PAPER_TRADING: "true"
+      EXCHANGE_SANDBOX: "true"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      redis:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/www:/srv/www:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:
