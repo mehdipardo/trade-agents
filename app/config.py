@@ -45,7 +45,8 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash-lite"
 
     # --- Exchange --------------------------------------------------------
-    exchange_id: str = "binance"
+    # Futures testnet so agents can short (Binance Futures is geo-blocked in FR).
+    exchange_id: str = "krakenfutures"
     exchange_api_key: str = ""
     exchange_secret: str = ""
 

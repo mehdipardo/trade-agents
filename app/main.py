@@ -177,8 +177,23 @@ def create_app() -> FastAPI:
     app.include_router(sources_router)
     app.include_router(ws_router)
 
+    # Serve the dashboard SPA (deploy/www) at "/" when present. Mounted last so
+    # API/WS routes always take precedence. In prod Caddy also serves it, but
+    # this lets the app self-serve the single shareable URL.
+    _mount_dashboard(app)
+
     get_logger("app").info("app_created", app_env=settings.app_env)
     return app
+
+
+def _mount_dashboard(app: FastAPI) -> None:
+    from pathlib import Path
+
+    www = Path(__file__).resolve().parents[1] / "deploy" / "www"
+    if (www / "index.html").is_file():
+        from fastapi.staticfiles import StaticFiles
+
+        app.mount("/", StaticFiles(directory=str(www), html=True), name="dashboard")
 
 
 app = create_app()

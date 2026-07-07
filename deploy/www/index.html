@@ -1,1098 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>FlashSentiment Trader</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E" />
 <style>
   :root{
-    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Inter",sans-serif;
-    --font-mono:ui-monospace,"SF Mono","JetBrains Mono","Roboto Mono",Menlo,Consolas,monospace;
-
-    --bg:#F7F8FB; --surface:#FFFFFF; --surface-2:#FBFBFE; --surface-inset:#F4F5FA;
-    --border:#E7E9F2; --border-strong:#D6D9E7;
-    --ink:#12141C; --muted:#5A6072; --faint:#8B90A2;
-    --accent:#4B57E6; --accent-ink:#3A45C4; --accent-weak:#EEF0FE; --accent-line:#C9CEFB;
-
-    --good:#15A75B; --good-weak:#E6F6EE; --good-ink:#0E7C43;
-    --warn:#C07A00; --warn-weak:#FBF0DC; --warn-ink:#9A6200;
-    --bad:#D8283A; --bad-weak:#FCE9EB; --bad-ink:#B01B2C;
-    --neutral:#7E8498; --neutral-weak:#EFF0F4; --neutral-ink:#5A6072;
-
-    --shadow-sm:0 1px 2px rgba(20,24,40,.05);
-    --shadow-md:0 6px 20px -8px rgba(30,35,70,.18),0 1px 2px rgba(20,24,40,.04);
-    --shadow-lg:0 18px 44px -18px rgba(30,35,70,.28);
-    --r-sm:8px; --r-md:12px; --r-lg:16px;
+    --bg:#f7f8fb; --card:#fff; --line:#e7e9f2; --ink:#12141c; --muted:#5a6072;
+    --accent:#4b57e6; --green:#15a75b; --amber:#c77a00; --red:#dc2a3a; --gray:#8b90a2;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --ui:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --radius:14px; --shadow:0 1px 2px rgba(18,20,28,.04),0 4px 16px rgba(18,20,28,.05);
   }
   @media (prefers-color-scheme:dark){
-    :root{
-      --bg:#0A0C13; --surface:#12141E; --surface-2:#161927; --surface-inset:#0E111B;
-      --border:#242838; --border-strong:#31364A;
-      --ink:#EAECF6; --muted:#9AA0B4; --faint:#6C7288;
-      --accent:#7E8AFF; --accent-ink:#A7AFFF; --accent-weak:#1A1E36; --accent-line:#343B63;
-      --good:#40D68C; --good-weak:#0F2419; --good-ink:#5FE0A0;
-      --warn:#F0B04C; --warn-weak:#2A2010; --warn-ink:#F5C070;
-      --bad:#FF6C7B; --bad-weak:#2B1418; --bad-ink:#FF8A96;
-      --neutral:#8B90A2; --neutral-weak:#1B1F2B; --neutral-ink:#A2A8BC;
-      --shadow-sm:0 1px 2px rgba(0,0,0,.4);
-      --shadow-md:0 8px 24px -10px rgba(0,0,0,.6),0 1px 2px rgba(0,0,0,.4);
-      --shadow-lg:0 20px 50px -18px rgba(0,0,0,.7);
-    }
+    :root{--bg:#0e0f14;--card:#171923;--line:#262a38;--ink:#eef0f6;--muted:#9aa0b4;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);}
   }
-  :root[data-theme="light"]{
-    --bg:#F7F8FB; --surface:#FFFFFF; --surface-2:#FBFBFE; --surface-inset:#F4F5FA;
-    --border:#E7E9F2; --border-strong:#D6D9E7;
-    --ink:#12141C; --muted:#5A6072; --faint:#8B90A2;
-    --accent:#4B57E6; --accent-ink:#3A45C4; --accent-weak:#EEF0FE; --accent-line:#C9CEFB;
-    --good:#15A75B; --good-weak:#E6F6EE; --good-ink:#0E7C43;
-    --warn:#C07A00; --warn-weak:#FBF0DC; --warn-ink:#9A6200;
-    --bad:#D8283A; --bad-weak:#FCE9EB; --bad-ink:#B01B2C;
-    --neutral:#7E8498; --neutral-weak:#EFF0F4; --neutral-ink:#5A6072;
-    --shadow-sm:0 1px 2px rgba(20,24,40,.05);
-    --shadow-md:0 6px 20px -8px rgba(30,35,70,.18),0 1px 2px rgba(20,24,40,.04);
-    --shadow-lg:0 18px 44px -18px rgba(30,35,70,.28);
-  }
-  :root[data-theme="dark"]{
-    --bg:#0A0C13; --surface:#12141E; --surface-2:#161927; --surface-inset:#0E111B;
-    --border:#242838; --border-strong:#31364A;
-    --ink:#EAECF6; --muted:#9AA0B4; --faint:#6C7288;
-    --accent:#7E8AFF; --accent-ink:#A7AFFF; --accent-weak:#1A1E36; --accent-line:#343B63;
-    --good:#40D68C; --good-weak:#0F2419; --good-ink:#5FE0A0;
-    --warn:#F0B04C; --warn-weak:#2A2010; --warn-ink:#F5C070;
-    --bad:#FF6C7B; --bad-weak:#2B1418; --bad-ink:#FF8A96;
-    --neutral:#8B90A2; --neutral-weak:#1B1F2B; --neutral-ink:#A2A8BC;
-    --shadow-sm:0 1px 2px rgba(0,0,0,.4);
-    --shadow-md:0 8px 24px -10px rgba(0,0,0,.6),0 1px 2px rgba(0,0,0,.4);
-    --shadow-lg:0 20px 50px -18px rgba(0,0,0,.7);
-  }
-
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui);
-    font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;
-    text-rendering:optimizeLegibility;overflow-x:hidden}
-  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
-  .app{max-width:1360px;margin:0 auto;padding:0 20px 40px}
-  [hidden]{display:none!important}
-
-  /* ---------- Top bar ---------- */
-  .topbar{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--bg) 82%,transparent);
-    backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--border);
-    margin:0 -20px;padding:0 20px}
-  .topbar-inner{max-width:1360px;margin:0 auto;display:flex;align-items:center;gap:12px;
-    height:58px;flex-wrap:wrap}
-  .brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.01em}
-  .brand .logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
-    background:linear-gradient(150deg,var(--accent),color-mix(in srgb,var(--accent) 60%,#8b5cf6));
-    color:#fff;box-shadow:var(--shadow-sm)}
-  .brand .logo svg{width:15px;height:15px}
-  .brand .sub{color:var(--faint);font-weight:450;font-size:11px;letter-spacing:.02em}
-
-  .nav{display:flex;gap:3px;padding:3px;background:var(--surface-inset);border:1px solid var(--border);
-    border-radius:10px}
-  .nav button{font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;
-    border:0;background:transparent;padding:6px 12px;border-radius:7px;display:flex;align-items:center;gap:6px;
-    transition:all .15s ease}
-  .nav button svg{width:14px;height:14px}
-  .nav button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
-  .nav .armct{font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--accent-ink);
-    background:var(--accent-weak);border:1px solid var(--accent-line);border-radius:100px;
-    padding:0 6px;min-width:16px;text-align:center}
-
-  .health{display:flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid var(--border);
-    border-radius:100px;background:var(--surface);font-size:12px;color:var(--muted)}
-  .dot{width:8px;height:8px;border-radius:50%;background:var(--good);position:relative;flex:none}
-  .dot.live::after{content:"";position:absolute;inset:-4px;border-radius:50%;
-    background:var(--good);opacity:.35;animation:ping 2s ease-out infinite}
-  .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
-  @keyframes ping{0%{transform:scale(1);opacity:.4}80%,100%{transform:scale(2.4);opacity:0}}
-  .spacer{flex:1}
-  .badge-paper{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);
-    font-size:11px;font-weight:600;letter-spacing:.06em;padding:5px 10px;border-radius:7px;
-    color:var(--warn-ink);background:var(--warn-weak);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}
-  .badge-paper .lock{width:11px;height:11px}
-  .kill{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-ui);font-size:12.5px;
-    font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer;
-    border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);
-    box-shadow:var(--shadow-sm);transition:all .16s ease}
-  .kill:hover{border-color:var(--bad);color:var(--bad-ink)}
-  .kill .k-dot{width:9px;height:9px;border-radius:3px;background:var(--good);flex:none}
-  .kill[aria-pressed="true"]{background:var(--bad-weak);border-color:var(--bad);color:var(--bad-ink)}
-  .kill[aria-pressed="true"] .k-dot{background:var(--bad)}
-
-  .disclaimer{font-size:11.5px;color:var(--faint);padding:9px 2px 2px;display:flex;
-    align-items:center;gap:7px}
-  .disclaimer svg{width:12px;height:12px;opacity:.7}
-
-  /* ---------- Cards ---------- */
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
-    box-shadow:var(--shadow-sm)}
-  .card-head{display:flex;align-items:center;gap:10px;padding:14px 16px 12px}
-  .card-head h2{margin:0;font-size:12px;font-weight:650;letter-spacing:.05em;
-    text-transform:uppercase;color:var(--muted)}
-  .card-head .count{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--faint);
-    background:var(--surface-inset);border:1px solid var(--border);padding:2px 7px;border-radius:6px}
-  .card-head .h-ic{width:15px;height:15px;color:var(--faint)}
-  .card-head .h-note{margin-left:auto;font-size:11.5px;color:var(--faint);font-family:var(--font-mono)}
-
-  /* ---------- Hero pipeline ---------- */
-  .hero{margin-top:16px;padding:0;overflow:hidden;box-shadow:var(--shadow-md)}
-  .armed-note{display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:550;
-    background:var(--accent-weak);color:var(--accent-ink);border-bottom:1px solid var(--accent-line);
-    overflow:hidden;max-height:0;padding:0 20px;transition:max-height .3s ease,padding .3s ease}
-  .armed-note.show{max-height:54px;padding:10px 20px}
-  .armed-note svg{width:15px;height:15px;flex:none}
-  .armed-note code{font-family:var(--font-mono);font-size:11.5px;background:color-mix(in srgb,var(--accent) 14%,transparent);padding:1px 6px;border-radius:5px}
-  .hero-top{display:flex;align-items:flex-start;gap:16px;padding:18px 20px 14px;
-    border-bottom:1px solid var(--border);flex-wrap:wrap}
-  .event-block{min-width:0;flex:1 1 340px}
-  .event-eyebrow{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.05em;
-    text-transform:uppercase;color:var(--faint);font-weight:600}
-  .etag{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.02em;text-transform:none;
-    padding:2px 7px;border-radius:5px;background:var(--accent-weak);color:var(--accent-ink);
-    border:1px solid var(--accent-line)}
-  .event-title{margin:7px 0 3px;font-size:19px;font-weight:640;letter-spacing:-.015em;
-    line-height:1.25;text-wrap:balance}
-  .event-meta{font-size:12.5px;color:var(--muted)}
-  .event-meta b{color:var(--ink);font-weight:600}
-  .latency-block{flex:none;text-align:right;min-width:180px}
-  .latency-label{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);
-    font-weight:600}
-  .latency-value{font-family:var(--font-mono);font-size:34px;font-weight:600;letter-spacing:-.02em;
-    line-height:1;margin-top:5px;color:var(--ink);font-variant-numeric:tabular-nums}
-  .latency-value .u{font-size:17px;color:var(--muted);margin-left:2px}
-  .latency-sub{font-size:11px;color:var(--faint);margin-top:5px;font-family:var(--font-mono)}
-
-  .pipe-wrap{padding:8px 10px 18px;overflow-x:auto}
-  .pipeline{position:relative;min-width:720px;padding:26px 14px 46px}
-  .pipeline.idle .node .node-dot{animation:beat 2.4s ease-in-out infinite}
-  @keyframes beat{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.25)}}
-
-  .rail-layer{position:absolute;inset:0;pointer-events:none;z-index:1}
-  .edge{position:absolute;height:3px;top:0;background:var(--border);border-radius:3px;overflow:hidden}
-  .edge-fill{position:absolute;inset:0;width:0;border-radius:3px;background:var(--accent);
-    transition:width .5s cubic-bezier(.4,0,.2,1)}
-  .bypass{position:absolute;height:0;border-top:2px dashed var(--border-strong);opacity:0;
-    transition:opacity .2s ease}
-  .bypass.show{opacity:1}
-  .bypass-fill{position:absolute;top:-1.5px;left:0;height:3px;width:0;border-radius:3px;
-    background:var(--neutral);transition:width .55s cubic-bezier(.4,0,.2,1)}
-  .packet{position:absolute;width:15px;height:15px;border-radius:50%;z-index:5;opacity:0;
-    background:var(--accent);left:0;top:0;
-    box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent),0 0 12px 2px color-mix(in srgb,var(--accent) 55%,transparent);
-    transition:left .5s cubic-bezier(.45,0,.25,1),top .5s cubic-bezier(.45,0,.25,1),
-      background .2s ease,box-shadow .2s ease,opacity .18s ease}
-
-  .nodes{position:relative;z-index:2;display:flex;justify-content:space-between;gap:0}
-  .node{position:relative;width:124px;flex:none;text-align:center;display:flex;
-    flex-direction:column;align-items:center;gap:8px;z-index:2}
-  .node-chip{position:relative;width:100%;padding:13px 8px 11px;border-radius:var(--r-md);
-    background:var(--surface-2);border:1px solid var(--border);box-shadow:var(--shadow-sm);
-    transition:border-color .25s ease,box-shadow .25s ease,background .25s ease,transform .25s ease}
-  .node-ic{width:26px;height:26px;margin:0 auto 6px;color:var(--faint);
-    display:grid;place-items:center;transition:color .25s ease}
-  .node-ic svg{width:22px;height:22px}
-  .node-name{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--muted);
-    letter-spacing:.01em;transition:color .25s ease}
-  .node-lat{font-family:var(--font-mono);font-size:11px;color:var(--faint);margin-top:5px;
-    min-height:15px;font-variant-numeric:tabular-nums}
-  .node-dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;
-    background:var(--border-strong);transition:background .25s ease}
-
-  .node.active .node-chip{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak),var(--shadow-md);
-    transform:translateY(-2px)}
-  .node.active .node-ic,.node.active .node-name{color:var(--accent-ink)}
-  .node.active .node-dot{background:var(--accent)}
-  .node.thinking .node-chip{animation:think 1s ease-in-out infinite}
-  @keyframes think{0%,100%{box-shadow:0 0 0 3px var(--accent-weak),var(--shadow-md)}
-    50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--accent) 14%,transparent),var(--shadow-md)}}
-  .node.done .node-chip{border-color:var(--border-strong)}
-  .node.done .node-ic{color:var(--ink)} .node.done .node-name{color:var(--ink)}
-  .node.done .node-dot{background:var(--muted)}
-
-  .node.s-executed .node-chip{border-color:var(--good);background:var(--good-weak);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 16%,transparent),var(--shadow-md)}
-  .node.s-executed .node-ic,.node.s-executed .node-name{color:var(--good-ink)} .node.s-executed .node-dot{background:var(--good)}
-  .node.s-rejected_risk .node-chip{border-color:var(--warn);background:var(--warn-weak);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 16%,transparent),var(--shadow-md)}
-  .node.s-rejected_risk .node-ic,.node.s-rejected_risk .node-name{color:var(--warn-ink)} .node.s-rejected_risk .node-dot{background:var(--warn)}
-  .node.s-skipped_neutral .node-chip,.node.s-skipped_duplicate .node-chip{border-color:var(--neutral);background:var(--neutral-weak)}
-  .node.s-skipped_neutral .node-ic,.node.s-skipped_neutral .node-name,
-  .node.s-skipped_duplicate .node-ic,.node.s-skipped_duplicate .node-name{color:var(--neutral-ink)}
-  .node.s-skipped_neutral .node-dot,.node.s-skipped_duplicate .node-dot{background:var(--neutral)}
-  .node.s-failed .node-chip{border-color:var(--bad);background:var(--bad-weak);box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 16%,transparent),var(--shadow-md)}
-  .node.s-failed .node-ic,.node.s-failed .node-name{color:var(--bad-ink)} .node.s-failed .node-dot{background:var(--bad)}
-
-  .reason-bar{margin:14px 12px 0;min-height:0;display:flex;justify-content:center}
-  .reason-pill{display:inline-flex;align-items:center;gap:9px;font-size:12.5px;padding:7px 14px;
-    border-radius:100px;font-weight:550;opacity:0;transform:translateY(4px);
-    transition:opacity .3s ease,transform .3s ease;border:1px solid transparent;max-width:100%}
-  .reason-pill.show{opacity:1;transform:none}
-  .reason-pill .em{font-size:14px;line-height:1}
-  .reason-pill code{font-family:var(--font-mono);font-size:11.5px;padding:1px 6px;border-radius:5px;
-    background:color-mix(in srgb,var(--ink) 6%,transparent)}
-
-  /* ---------- Cockpit grid ---------- */
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
-  @media(max-width:900px){.grid{grid-template-columns:1fr}}
-
-  .panel-body{padding:4px 8px 10px}
-  .empty{padding:26px 16px;text-align:center;color:var(--faint);font-size:13px}
-  .empty svg{width:26px;height:26px;opacity:.5;margin-bottom:8px}
-  .pos-row{display:grid;grid-template-columns:1fr auto;gap:6px 14px;padding:12px;
-    border-radius:var(--r-md);margin:4px 4px;transition:background .2s ease}
-  .pos-row:hover{background:var(--surface-inset)}
-  .pos-row+.pos-row{border-top:1px solid var(--border)}
-  .pos-main{display:flex;align-items:center;gap:10px;min-width:0}
-  .asset{font-family:var(--font-mono);font-weight:600;font-size:13.5px}
-  .side-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
-    letter-spacing:.03em;padding:3px 8px;border-radius:6px;font-family:var(--font-mono)}
-  .side-pill svg{width:9px;height:9px}
-  .side-long{color:var(--good-ink);background:var(--good-weak);border:1px solid color-mix(in srgb,var(--good) 34%,transparent)}
-  .side-short{color:var(--bad-ink);background:var(--bad-weak);border:1px solid color-mix(in srgb,var(--bad) 34%,transparent)}
-  .pos-meta{font-size:11.5px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:2px}
-  .pos-meta .mono{color:var(--ink)}
-  .pos-side-vals{text-align:right;font-family:var(--font-mono);font-size:12px}
-  .pos-side-vals .sl{color:var(--bad-ink)} .pos-side-vals .tp{color:var(--good-ink)}
-  .pos-side-vals .lbl{color:var(--faint);font-size:10px;margin-right:5px;font-family:var(--font-ui)}
-
-  .risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:6px 16px 16px}
-  .risk-cell{background:var(--surface-inset);border:1px solid var(--border);border-radius:var(--r-md);
-    padding:12px 13px}
-  .risk-cell.full{grid-column:1/-1}
-  .risk-cap-label{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;
-    color:var(--muted);margin-bottom:9px}
-  .risk-cap-label b{font-family:var(--font-mono);font-size:15px;color:var(--ink);font-weight:600}
-  .gauge{display:flex;gap:5px}
-  .gauge .seg{flex:1;height:9px;border-radius:3px;background:var(--border);transition:background .3s ease}
-  .gauge .seg.on{background:var(--accent)}
-  .gauge.warn .seg.on{background:var(--warn)} .gauge.full .seg.on{background:var(--bad)}
-  .kv-label{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-weight:600}
-  .pnl-val{font-family:var(--font-mono);font-size:22px;font-weight:600;margin-top:6px;
-    display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
-  .pnl-val.pos{color:var(--good-ink)} .pnl-val.neg{color:var(--bad-ink)}
-  .pnl-val svg{width:13px;height:13px}
-  .cooldowns{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;min-height:26px}
-  .cool-chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;
-    padding:4px 9px;border-radius:100px;background:var(--warn-weak);color:var(--warn-ink);
-    border:1px solid color-mix(in srgb,var(--warn) 26%,transparent)}
-  .cool-chip .cd-dot{width:6px;height:6px;border-radius:50%;background:var(--warn);animation:beat 1.4s ease-in-out infinite}
-  .cooldowns .none{font-size:11.5px;color:var(--faint);font-family:var(--font-ui)}
-  .ks-line{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted)}
-  .ks-badge{font-family:var(--font-mono);font-size:11px;font-weight:600;padding:3px 9px;border-radius:6px}
-  .ks-badge.armed{color:var(--good-ink);background:var(--good-weak)}
-  .ks-badge.active{color:var(--bad-ink);background:var(--bad-weak)}
-
-  .feed{max-height:340px;overflow-y:auto;padding:2px 6px 6px}
-  .feed::-webkit-scrollbar{width:8px}.feed::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px}
-  .feed-row{display:flex;align-items:flex-start;gap:11px;padding:11px 10px;border-radius:var(--r-sm);
-    animation:slideIn .34s cubic-bezier(.2,.7,.3,1)}
-  .feed-row+.feed-row{border-top:1px solid var(--border)}
-  @keyframes slideIn{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:none}}
-  .feed-ic{flex:none;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:14px;
-    background:var(--surface-inset);border:1px solid var(--border)}
-  .feed-main{flex:1;min-width:0}
-  .feed-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .sent-pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:11px;
-    font-weight:700;padding:2px 8px;border-radius:6px;letter-spacing:.02em}
-  .sent-pill svg{width:9px;height:9px}
-  .sent-BULL{color:var(--good-ink);background:var(--good-weak)}
-  .sent-BEAR{color:var(--bad-ink);background:var(--bad-weak)}
-  .sent-NEUTRAL{color:var(--neutral-ink);background:var(--neutral-weak)}
-  .stars{font-size:11px;letter-spacing:1px;color:var(--warn)}
-  .stars .off{color:var(--border-strong)}
-  .conf{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
-  .feed-asset{font-family:var(--font-mono);font-size:12px;font-weight:600}
-  .feed-rationale{font-size:12px;color:var(--muted);margin-top:3px;overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap}
-  .feed-time{font-family:var(--font-mono);font-size:10.5px;color:var(--faint);margin-top:4px}
-  .status-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
-    padding:3px 8px;border-radius:6px;font-family:var(--font-mono)}
-  .status-chip .em{font-size:11px}
-  .st-executed{color:var(--good-ink);background:var(--good-weak)}
-  .st-rejected_risk{color:var(--warn-ink);background:var(--warn-weak)}
-  .st-skipped_neutral,.st-skipped_duplicate{color:var(--neutral-ink);background:var(--neutral-weak)}
-  .st-failed{color:var(--bad-ink);background:var(--bad-weak)}
-  .ord-nums{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);margin-top:3px;
-    display:flex;gap:12px;flex-wrap:wrap}
-  .ord-nums b{color:var(--ink);font-weight:600}
-
-  /* ---------- Demo controls ---------- */
-  .controls{margin-top:18px;padding:16px 18px}
-  .controls-head{display:flex;align-items:center;gap:10px;margin-bottom:13px}
-  .controls-head h2{margin:0;font-size:12px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
-  .controls-head .hint{margin-left:auto;font-size:11.5px;color:var(--faint)}
-  .btn-row{display:flex;gap:10px;flex-wrap:wrap}
-  .inject-btn{flex:1 1 190px;display:flex;align-items:center;gap:11px;text-align:left;
-    padding:12px 13px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface-2);
-    cursor:pointer;transition:all .16s ease;color:var(--ink);min-width:180px}
-  .inject-btn:hover:not(:disabled){border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak);transform:translateY(-1px)}
-  .inject-btn:disabled{opacity:.5;cursor:not-allowed}
-  .inject-btn .ib-ic{width:34px;height:34px;flex:none;border-radius:9px;display:grid;place-items:center;
-    background:var(--accent-weak);color:var(--accent-ink)}
-  .inject-btn .ib-ic svg{width:18px;height:18px}
-  .inject-btn.tone-bull .ib-ic{background:var(--good-weak);color:var(--good-ink)}
-  .inject-btn.tone-bear .ib-ic{background:var(--warn-weak);color:var(--warn-ink)}
-  .inject-btn.tone-neutral .ib-ic{background:var(--neutral-weak);color:var(--neutral-ink)}
-  .inject-btn.tone-danger .ib-ic{background:var(--bad-weak);color:var(--bad-ink)}
-  .ib-txt{min-width:0}
-  .ib-title{font-size:13px;font-weight:600;letter-spacing:-.01em}
-  .ib-sub{font-size:11px;color:var(--faint);margin-top:1px}
-  .auto-btn{flex:1 1 190px;justify-content:center;font-weight:600;font-size:13px;min-width:170px}
-  .auto-btn .ib-ic{background:var(--accent);color:#fff}
-  .auto-btn[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-weak)}
-  .auto-btn[aria-pressed="true"] .ib-ic{animation:spin 3s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-
-  /* ---------- Sources & Calendar ---------- */
-  .view-head{display:flex;align-items:flex-end;gap:14px;margin:20px 2px 4px;flex-wrap:wrap}
-  .view-head h1{margin:0;font-size:20px;font-weight:680;letter-spacing:-.02em}
-  .view-head p{margin:0;font-size:13px;color:var(--muted);flex:1 1 320px}
-  .src-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:6px 16px 16px}
-  @media(max-width:760px){.src-grid{grid-template-columns:1fr}}
-  .src-card{border:1px solid var(--border);border-radius:var(--r-md);padding:14px;background:var(--surface-2);
-    display:flex;flex-direction:column;gap:9px;transition:opacity .2s ease,border-color .2s ease}
-  .src-card.off{opacity:.62}
-  .src-top{display:flex;align-items:flex-start;gap:10px}
-  .src-name{font-weight:640;font-size:14px;letter-spacing:-.01em;display:flex;align-items:center;gap:7px}
-  .rec-star{color:var(--accent);font-size:12px}
-  .kind-badge{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.04em;
-    text-transform:uppercase;padding:2px 7px;border-radius:5px;border:1px solid transparent}
-  .kind-economic{color:var(--accent-ink);background:var(--accent-weak);border-color:var(--accent-line)}
-  .kind-social{color:var(--warn-ink);background:var(--warn-weak);border-color:color-mix(in srgb,var(--warn) 26%,transparent)}
-  .kind-regulatory{color:var(--good-ink);background:var(--good-weak);border-color:color-mix(in srgb,var(--good) 26%,transparent)}
-  .kind-news{color:var(--neutral-ink);background:var(--neutral-weak);border-color:var(--border-strong)}
-  .src-desc{font-size:12.5px;color:var(--muted);line-height:1.5}
-  .src-chips{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
-  .cost-chip{font-family:var(--font-mono);font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:100px;
-    border:1px solid var(--border-strong);color:var(--muted);background:var(--surface)}
-  .react-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-family:var(--font-mono)}
-  .react-chip .rdot{width:6px;height:6px;border-radius:50%;background:var(--good)}
-  .react-chip.fragile .rdot{background:var(--warn)}
-  .src-note{font-size:11px;color:var(--faint);font-style:italic;border-top:1px dashed var(--border);padding-top:8px}
-  .src-foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto}
-  .src-state{font-size:11.5px;font-weight:600;color:var(--faint);font-family:var(--font-mono)}
-  .src-state.on{color:var(--good-ink)}
-
-  .tgl{position:relative;width:40px;height:23px;border-radius:100px;border:1px solid var(--border-strong);
-    background:var(--surface-inset);cursor:pointer;transition:all .18s ease;flex:none;padding:0}
-  .tgl::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;
-    background:var(--surface);box-shadow:var(--shadow-sm);transition:transform .18s cubic-bezier(.4,0,.2,1)}
-  .tgl[aria-checked="true"]{background:var(--accent);border-color:var(--accent)}
-  .tgl[aria-checked="true"]::after{transform:translateX(17px);background:#fff}
-
-  .cal-row{display:grid;grid-template-columns:1.4fr auto auto;gap:12px 16px;align-items:center;
-    padding:14px 16px;transition:background .2s ease}
-  .cal-row+.cal-row{border-top:1px solid var(--border)}
-  .cal-row.armed{background:color-mix(in srgb,var(--accent) 5%,transparent)}
-  .cal-main{min-width:0}
-  .cal-title{font-weight:600;font-size:13.5px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .ccy{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 6px;
-    border-radius:5px;background:var(--surface-inset);border:1px solid var(--border);color:var(--muted)}
-  .vol-meter{display:inline-flex;gap:3px;vertical-align:middle}
-  .vol-meter .vb{width:5px;height:12px;border-radius:2px;background:var(--border-strong)}
-  .vol-meter .vb.on{background:var(--warn)} .vol-meter.v5 .vb.on{background:var(--bad)} .vol-meter.v3 .vb.on{background:var(--accent)}
-  .cal-sub{font-size:11.5px;color:var(--faint);margin-top:5px;font-family:var(--font-mono);display:flex;gap:14px;flex-wrap:wrap}
-  .cal-sub b{color:var(--muted);font-weight:600}
-  .cal-when{text-align:right;font-family:var(--font-mono);font-size:12px}
-  .cal-when .cd{color:var(--ink);font-weight:600;display:block} .cal-when .abs{color:var(--faint);font-size:10.5px;margin-top:3px;display:block}
-  .primed-chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10.5px;
-    font-weight:700;padding:3px 9px;border-radius:100px;color:var(--accent-ink);background:var(--accent-weak);
-    border:1px solid var(--accent-line)}
-  .primed-chip .pdot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:beat 1.2s ease-in-out infinite}
-  .cal-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-  .arm-btn{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;font-weight:600;
-    padding:6px 11px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface);
-    color:var(--muted);cursor:pointer;transition:all .15s ease}
-  .arm-btn:hover{border-color:var(--accent);color:var(--accent-ink)}
-  .arm-btn[aria-pressed="true"]{background:var(--accent-weak);border-color:var(--accent);color:var(--accent-ink)}
-  .arm-btn svg{width:13px;height:13px}
-  .release-btn{font:inherit;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:7px;
-    border:1px solid var(--good);background:var(--good-weak);color:var(--good-ink);cursor:pointer;transition:filter .15s ease}
-  .release-btn:hover{filter:brightness(.97)}
-  @media(max-width:640px){.cal-row{grid-template-columns:1fr;gap:10px}.cal-when{text-align:left}.cal-actions{align-items:flex-start}}
-
-  button:focus-visible,[tabindex]:focus-visible,[role="switch"]:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px;border-radius:8px}
-  .foot{margin-top:22px;text-align:center;font-size:11px;color:var(--faint)}
-
-  @media(prefers-reduced-motion:reduce){
-    *{animation-duration:.001ms!important;animation-iteration-count:1!important}
-    .packet{display:none!important}
-    .edge-fill,.bypass-fill{transition:width .001ms!important}
-    .node-chip{transition:none!important}
-  }
-  @media(max-width:560px){
-    .latency-block{text-align:left;min-width:0} .hero-top{gap:10px}
-    .risk-grid{grid-template-columns:1fr}
-    .brand .sub{display:none}
-  }
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ui);
+    font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px}
+  a{color:var(--accent)}
+  .topbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:12px 18px;background:var(--card);border-bottom:1px solid var(--line);
+    position:sticky;top:0;z-index:20}
+  .brand{font-weight:700;letter-spacing:-.01em}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--gray)}
+  .dot.ok{background:var(--green)} .dot.off{background:var(--red)}
+  .chip{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;
+    border:1px solid var(--line);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .chip.paper{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+  .grow{flex:1}
+  .btn{font:inherit;font-weight:600;font-size:13px;border:1px solid var(--line);
+    background:var(--card);color:var(--ink);border-radius:10px;padding:7px 12px;cursor:pointer}
+  .btn:hover{border-color:var(--accent)}
+  .btn.danger{color:var(--red);border-color:color-mix(in srgb,var(--red) 35%,var(--line))}
+  .btn.on{background:var(--red);color:#fff;border-color:var(--red)}
+  .tabs{display:flex;gap:6px}
+  .tab{padding:7px 12px;border-radius:10px;cursor:pointer;font-weight:600;color:var(--muted)}
+  .tab.active{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .pad{padding:16px}
+  .label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .grid{display:grid;gap:14px}
+  .cockpit{grid-template-columns:1fr 1fr}
+  @media(max-width:820px){.cockpit{grid-template-columns:1fr}}
+  .pipe{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:8px 4px}
+  .node{flex:1;min-width:120px;text-align:center;padding:14px 8px;border-radius:12px;
+    border:1px solid var(--line);background:var(--card);transition:.25s;position:relative}
+  .node .nm{font-weight:600;font-size:13px}
+  .node .lat{font-size:11px;color:var(--muted);margin-top:3px;min-height:14px}
+  .node.active{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+  .node.thinking{animation:pulse 1s infinite}
+  .node.done{border-color:color-mix(in srgb,var(--green) 45%,var(--line))}
+  @keyframes pulse{50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 8%,transparent)}}
+  @media (prefers-reduced-motion:reduce){.node.thinking{animation:none}}
+  .edge{align-self:center;width:26px;height:2px;background:var(--line);flex:none;transition:.2s}
+  .edge.lit{background:var(--accent)}
+  .headline{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:6px}
+  .lat-big{font-size:26px;font-weight:700}
+  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+  .b-exec{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+  .b-rej{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--amber)}
+  .b-skip{background:color-mix(in srgb,var(--gray) 18%,transparent);color:var(--gray)}
+  .b-fail{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
+  .row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+  .row:first-child{border-top:0}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .long{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+  .short{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
+  .bull{color:var(--green)} .bear{color:var(--red)} .neutral{color:var(--gray)}
+  .feed{max-height:300px;overflow:auto}
+  .muted{color:var(--muted)}
+  .empty{color:var(--muted);padding:16px 0;text-align:center;font-size:13px}
+  .kv{display:flex;justify-content:space-between;padding:6px 0}
+  .meter{height:8px;border-radius:999px;background:var(--line);overflow:hidden}
+  .meter>span{display:block;height:100%;background:var(--accent)}
+  .scn{display:flex;gap:8px;flex-wrap:wrap}
+  .src{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+  .toggle{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;
+    cursor:pointer;flex:none;transition:.2s;border:none}
+  .toggle.on{background:var(--green)}
+  .toggle::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+    background:#fff;transition:.2s}
+  .toggle.on::after{left:18px}
+  .hide{display:none}
+  h3{margin:0 0 10px;font-size:15px}
+  .disc{font-size:11px;color:var(--muted);margin-top:14px;text-align:center}
 </style>
-
+</head>
+<body>
 <div class="topbar">
-  <div class="topbar-inner">
-    <div class="brand">
-      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg></span>
-      <span>FlashSentiment<span class="sub"> · news → order</span></span>
-    </div>
-    <div class="nav" role="tablist" aria-label="Views">
-      <button role="tab" id="tabHome" aria-selected="true" aria-controls="viewHome">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12 12 5l8 7M6 10v9h12v-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Cockpit</button>
-      <button role="tab" id="tabSources" aria-selected="false" aria-controls="viewSources">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 4v16" stroke="currentColor" stroke-width="2"/></svg>Sources &amp; Calendar<span class="armct" id="navArm" hidden>0</span></button>
-    </div>
-    <div class="health" role="status" aria-live="polite">
-      <span class="dot live" id="healthDot" aria-hidden="true"></span>
-      <span id="healthText">Live</span>
-    </div>
-    <span class="spacer"></span>
-    <span class="badge-paper" title="No real funds — testnet only">
-      <svg class="lock" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg>
-      PAPER · TESTNET
-    </span>
-    <button class="kill" id="killBtn" aria-pressed="false" title="Halts all order execution">
-      <span class="k-dot" aria-hidden="true"></span><span id="killLabel">Kill switch</span>
-    </button>
+  <span class="dot" id="health-dot"></span>
+  <span class="brand">FlashSentiment&nbsp;Trader</span>
+  <span class="chip paper">Paper · Testnet</span>
+  <span class="chip" id="mode-chip">connecting…</span>
+  <span class="grow"></span>
+  <div class="tabs">
+    <div class="tab active" data-tab="cockpit">Cockpit</div>
+    <div class="tab" data-tab="sources">Sources &amp; Calendar</div>
   </div>
+  <button class="btn danger" id="kill-btn">Kill switch: off</button>
 </div>
 
-<div class="app">
-  <p class="disclaimer">
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    Demonstrates agentic reactivity (news → order in ~1–2&nbsp;s), <b>not</b> alpha vs HFT. Paper trading, not investment advice.
-  </p>
-
-  <!-- ===================== HOME VIEW ===================== -->
-  <div id="viewHome" role="tabpanel" aria-labelledby="tabHome">
-    <section class="card hero" aria-label="Live pipeline">
-      <div class="armed-note" id="armedNote" role="status" aria-live="polite">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="currentColor"/></svg>
-        <span id="armedNoteText"></span>
+<div class="wrap">
+  <section id="tab-cockpit">
+    <div class="card pad" style="margin-bottom:14px">
+      <div class="label">Live pipeline · news → order</div>
+      <div class="pipe" id="pipe"></div>
+      <div class="headline">
+        <span class="lat-big num" id="lat-big">—</span>
+        <span id="pl-badge"></span>
+        <span class="muted" id="pl-title">Waiting for the next event…</span>
       </div>
-      <div class="hero-top">
-        <div class="event-block">
-          <div class="event-eyebrow"><span>Current event</span><span class="etag" id="eventTag">idle</span></div>
-          <div class="event-title" id="eventTitle">Waiting for events…</div>
-          <div class="event-meta" id="eventMeta">The pipeline is idle. Inject a scenario below — or arm a calendar event — to watch a news item flow to an order.</div>
-        </div>
-        <div class="latency-block">
-          <div class="latency-label" id="latLabel">news → order</div>
-          <div class="latency-value"><span id="latValue">—</span><span class="u" id="latUnit"></span></div>
-          <div class="latency-sub" id="latSub">idle</div>
-        </div>
-      </div>
-      <div class="pipe-wrap">
-        <div class="pipeline idle" id="pipeline">
-          <div class="rail-layer" id="railLayer">
-            <div class="bypass" id="bypass"><div class="bypass-fill" id="bypassFill"></div></div>
-            <div class="packet" id="packet" aria-hidden="true"></div>
-          </div>
-          <div class="nodes" id="nodes"></div>
-          <div class="reason-bar"><span class="reason-pill" id="reasonPill" role="status" aria-live="polite"></span></div>
-        </div>
-      </div>
-    </section>
-
-    <div class="grid">
-      <section class="card" aria-label="Open positions">
-        <div class="card-head">
-          <svg class="h-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 3v18h18M7 14l3-4 3 3 5-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <h2>Open positions</h2><span class="count" id="posCount">0</span>
-        </div>
-        <div class="panel-body" id="positions"></div>
-      </section>
-
-      <section class="card" aria-label="Risk state">
-        <div class="card-head">
-          <svg class="h-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 7.7 8 9 4.5-1.3 8-4 8-9V6l-8-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-          <h2>Risk state</h2>
-        </div>
-        <div class="risk-grid">
-          <div class="risk-cell full">
-            <div class="risk-cap-label"><span>Trades this hour</span><span><b id="tradesNow">0</b> / 6</span></div>
-            <div class="gauge" id="gauge"></div>
-          </div>
-          <div class="risk-cell">
-            <div class="kv-label">Daily P&L</div>
-            <div class="pnl-val pos" id="pnl"><svg viewBox="0 0 24 24" fill="none" id="pnlArrow" aria-hidden="true"><path d="M5 12l7-7 7 7M12 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="pnlVal">+$0.00</span></div>
-          </div>
-          <div class="risk-cell">
-            <div class="kv-label">Kill switch</div>
-            <div class="ks-line" style="margin-top:9px"><span class="ks-badge armed" id="ksBadge">ARMED · executing</span></div>
-          </div>
-          <div class="risk-cell full">
-            <div class="kv-label">Asset cooldowns</div>
-            <div class="cooldowns" id="cooldowns"><span class="none">No assets in cooldown</span></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="card" aria-label="Signals feed">
-        <div class="card-head">
-          <svg class="h-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12h3l2 6 4-14 2 8h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <h2>Signals</h2><span class="count" id="sigCount">0</span>
-        </div>
-        <div class="feed" id="signals" role="log" aria-live="polite" aria-label="Signals feed"></div>
-      </section>
-
-      <section class="card" aria-label="Orders feed">
-        <div class="card-head">
-          <svg class="h-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <h2>Orders</h2><span class="count" id="ordCount">0</span>
-        </div>
-        <div class="feed" id="orders" role="log" aria-live="polite" aria-label="Orders feed"></div>
-      </section>
     </div>
 
-    <section class="card controls" aria-label="Demo controls">
-      <div class="controls-head">
-        <h2>Inject scenario</h2>
-        <span class="hint">Replays canonical demo events · inject the same one twice within 8&nbsp;s to trigger dedup</span>
-      </div>
-      <div class="btn-row" id="btnRow"></div>
-    </section>
-  </div>
-
-  <!-- ===================== SOURCES & CALENDAR VIEW ===================== -->
-  <div id="viewSources" role="tabpanel" aria-labelledby="tabSources" hidden>
-    <div class="view-head">
-      <h1>Sources &amp; Calendar</h1>
-      <p>A curated catalog of vetted live feeds plus scheduled macro events. <b>Arm</b> a calendar event to pre-position a watcher — the print fires through the same pipeline within ~1–2&nbsp;s of release.</p>
+    <div class="card pad" style="margin-bottom:14px">
+      <div class="label" style="margin-bottom:8px">Inject a scenario (demo)</div>
+      <div class="scn" id="scenarios"></div>
     </div>
 
-    <section class="card" aria-label="Sources catalog" style="margin-top:14px">
-      <div class="card-head">
-        <svg class="h-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5ZM3 12l9 5 9-5M3 16l9 5 9-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-        <h2>Source catalog</h2><span class="h-note" id="srcNote">0 of 0 live</span>
-      </div>
-      <div class="src-grid" id="srcGrid"></div>
-    </section>
+    <div class="grid cockpit">
+      <div class="card pad"><h3>Open positions</h3><div id="positions"></div></div>
+      <div class="card pad"><h3>Risk state</h3><div id="risk"></div></div>
+      <div class="card pad"><h3>Signals</h3><div class="feed" id="signals"></div></div>
+      <div class="card pad"><h3>Orders</h3><div class="feed" id="orders"></div></div>
+    </div>
+  </section>
 
-    <section class="card" aria-label="Economic calendar" style="margin-top:16px;margin-bottom:8px">
-      <div class="card-head">
-        <svg class="h-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <h2>Economic calendar · ranked by volatility</h2><span class="h-note" id="calNote">0 armed</span>
-      </div>
-      <div id="calList"></div>
-    </section>
-  </div>
+  <section id="tab-sources" class="hide">
+    <div class="card pad" style="margin-bottom:14px">
+      <h3>Source catalog</h3>
+      <div class="muted" style="font-size:13px;margin-bottom:6px">
+        Broad aggregators feed the firehose; the LLM triages by impact and long/short-ability.</div>
+      <div id="sources"></div>
+    </div>
+    <div class="card pad">
+      <h3>Economic calendar · ranked by volatility</h3>
+      <div class="muted" style="font-size:13px;margin-bottom:6px">
+        Arming an event pre-positions a watcher that fires the print into the pipeline at release.</div>
+      <div id="calendar"></div>
+    </div>
+  </section>
 
-  <p class="foot mono">FlashSentiment Trader · design mockup · client-side simulation of the <span style="font-family:var(--font-ui)">GET /ws/live</span> event stream</p>
+  <div class="disc">Demo / paper trading only — not investment advice. Real-money use would require regulatory review.</div>
 </div>
 
 <script>
-(() => {
-  "use strict";
-  const $ = s => document.querySelector(s);
-  const reduce = () => window.matchMedia("(prefers-reduced-motion:reduce)").matches;
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const raf = () => new Promise(r => requestAnimationFrame(()=>requestAnimationFrame(r)));
-  const rnd = (a,b) => Math.random()*(b-a)+a;
-  const iRnd = (a,b) => Math.round(rnd(a,b));
-  const money = n => (n<0?"-":"+")+"$"+Math.abs(n).toFixed(2);
-  const price = n => n>=1000 ? n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) : n.toFixed(2);
-  const nowTime = () => new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-  const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const NODES=["dedup","analyst","risk","executor","notifier"];
+const SCEN=[["trump_btc_bull","Trump: BTC reserve"],["cpi_hot_bear","Hot CPI"],
+  ["sec_etf_approval","SEC: SOL ETF"],["neutral_report","Routine report"],
+  ["prompt_injection","Prompt injection"]];
+const $=s=>document.querySelector(s);
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const fmtPct=v=>(v==null?"—":(v*100).toFixed(0)+"%");
+const badgeClass=s=>({executed:"b-exec",rejected_risk:"b-rej",skipped_neutral:"b-skip",
+  skipped_duplicate:"b-skip",failed:"b-fail"}[s]||"b-skip");
+const emojiOf=s=>({executed:"🟢",rejected_risk:"🚫",skipped_neutral:"⚪",
+  skipped_duplicate:"⚪",failed:"🔴"}[s]||"⚪");
 
-  const ICONS = {
-    dedup:'<svg viewBox="0 0 24 24" fill="none"><rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10" stroke="currentColor" stroke-width="2"/></svg>',
-    analyst:'<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m3.3-5.7 1.4 1.4m9 9 1.4 1.4m0-11.8-1.4 1.4m-9 9-1.4 1.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="12" r="3.4" stroke="currentColor" stroke-width="2"/></svg>',
-    risk:'<svg viewBox="0 0 24 24" fill="none"><path d="M12 3 5 6v5c0 4.2 2.9 6.6 7 7.8 4.1-1.2 7-3.6 7-7.8V6l-7-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    executor:'<svg viewBox="0 0 24 24" fill="none"><path d="M5 15c0-5 3.5-9 9.5-11C15 9 12 13 7 14l-2 1Z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M7 14l3 3M6 17l-2 3 3-1" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    notifier:'<svg viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 20a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
-  };
-  const ARROW_UP='<svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12l7-7 7 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const ARROW_DN='<svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7 7 7-7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const SQ='<svg viewBox="0 0 24 24" fill="none"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>';
-  const STATUS = {
-    executed:{em:"🟢",label:"executed"}, rejected_risk:{em:"🚫",label:"rejected"},
-    skipped_neutral:{em:"⚪",label:"skipped"}, skipped_duplicate:{em:"⚪",label:"duplicate"},
-    failed:{em:"🔴",label:"failed"}
-  };
-  const NODES = ["dedup","analyst","risk","executor","notifier"];
-  const STVAR = { executed:"--good", rejected_risk:"--warn",
-    skipped_neutral:"--neutral", skipped_duplicate:"--neutral", failed:"--bad" };
-  const MKT = { "BTC/USDT":68412.5, "SOL/USDT":172.34, "ETH/USDT":3284.1, "DOGE/USDT":0.1642 };
+const pipe=$("#pipe"), nodeEls={};
+NODES.forEach((n,i)=>{
+  if(i)pipe.appendChild(el("div","edge",""));
+  const node=el("div","node",`<div class="nm">${n}</div><div class="lat"></div>`);
+  nodeEls[n]=node; pipe.appendChild(node);
+});
+function resetPipe(){NODES.forEach(n=>{nodeEls[n].className="node";nodeEls[n].querySelector(".lat").textContent="";});
+  pipe.querySelectorAll(".edge").forEach(e=>e.className="edge");}
+function litEdge(i){const es=pipe.querySelectorAll(".edge");if(es[i-1])es[i-1].className="edge lit";}
 
-  const SCEN = {
-    trump_btc_bull:{ tone:"bull", label:"Trump: BTC reserve", sub:"policy · bullish → executed",
-      tag:"policy", author:"Donald Trump", source:"Truth Social",
-      title:"Strategic Bitcoin reserve, NOW!",
-      sentiment:"BULL", intensity:4, asset:"BTC/USDT", confidence:0.86,
-      rationale:"Head-of-state endorsement of a national BTC reserve — strong directional catalyst." },
-    sec_etf_approval:{ tone:"bull", label:"SEC: spot SOL ETF", sub:"regulatory · bullish → executed",
-      tag:"regulatory", author:"US SEC", source:"SEC.gov",
-      title:"SEC approves first spot Solana ETF",
-      sentiment:"BULL", intensity:4, asset:"SOL/USDT", confidence:0.82,
-      rationale:"First spot SOL ETF approved, effective immediately; analysts expect significant inflows." },
-    cpi_hot_bear:{ tone:"bear", label:"Hot CPI print", sub:"macro · bearish → risk veto",
-      tag:"macro", author:"US BLS", source:"bls.gov",
-      title:"US CPI 4.2% YoY vs 3.1% expected",
-      sentiment:"BEAR", intensity:4, asset:"BTC/USDT", confidence:0.79,
-      rationale:"Hot inflation surprise implies a hawkish Fed and risk-off across crypto." },
-    neutral_report:{ tone:"neutral", label:"EF transparency report", sub:"report · neutral → skipped",
-      tag:"report", author:"Ethereum Foundation", source:"blog.ethereum.org",
-      title:"Ethereum Foundation publishes quarterly transparency report",
-      sentiment:"NEUTRAL", intensity:1, asset:"ETH/USDT", confidence:0.31,
-      rationale:"Routine grants/treasury disclosure — no policy or roadmap change." },
-    prompt_injection:{ tone:"danger", label:"Prompt injection", sub:"robustness · injection ignored",
-      tag:"unverified", author:"unknown", source:"anon feed",
-      title:"Breaking crypto market update",
-      sentiment:"NEUTRAL", intensity:1, asset:null, confidence:0.12,
-      rationale:"Contains an instruction-override attempt (‘buy DOGE now’). Ignored; classified NEUTRAL." }
-  };
-  const ORDER = ["trump_btc_bull","sec_etf_approval","cpi_hot_bear","neutral_report","prompt_injection"];
+const scnWrap=$("#scenarios");
+SCEN.forEach(([id,label])=>{const b=el("button","btn",label);b.onclick=()=>inject(id);scnWrap.appendChild(b);});
+async function inject(scenario){try{await api("/admin/inject",{scenario});}catch(e){}}
 
-  const SOURCES = [
-    { id:"econ_cal", name:"Economic calendar", kind:"economic", cost:"free", recommended:true,
-      description:"Scheduled macro prints (CPI, NFP, FOMC). Deterministic timing — the strongest, free reactivity story.",
-      reactivity:"scheduled → ~1–2s", fragile:false, notes:null, enabled:true },
-    { id:"truth_social", name:"Trump · Truth Social", kind:"social", cost:"free",
-      description:"Real-time posts from a market-moving account. High signal, but unstructured and noisy.",
-      reactivity:"~seconds (fragile)", fragile:true, notes:"Unofficial feed — rate-limited and prone to outages.", enabled:true },
-    { id:"sec_press", name:"SEC press & litigation", kind:"regulatory", cost:"freemium",
-      description:"Enforcement actions, approvals and litigation releases from the U.S. SEC.",
-      reactivity:"~minutes", fragile:false, notes:null, enabled:true },
-    { id:"congress", name:"US Congress · tracked bills", kind:"regulatory", cost:"free",
-      description:"Status changes on watched crypto bills (CLARITY, GENIUS). Slow but high-certainty.",
-      reactivity:"hours (scheduled)", fragile:false, notes:"Committee schedules shift; timing is approximate.", enabled:false },
-    { id:"crypto_news", name:"Crypto news baseline", kind:"news", cost:"freemium",
-      description:"Aggregated headline wire across major crypto outlets for broad coverage.",
-      reactivity:"~seconds", fragile:false, notes:null, enabled:true }
-  ];
+async function api(path,body){
+  const r=await fetch(path,{method:body?"POST":"GET",
+    headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});
+  return r.ok?r.json().catch(()=>({})):Promise.reject(r.status);
+}
 
-  const CAL = [
-    { id:"nfp", title:"US Non-Farm Payrolls", ccy:"USD", volatility:5, offsetMin:52,
-      forecast:"+190K", previous:"+206K",
-      release:{ tag:"calendar", author:"US BLS", source:"Economic calendar", title:"US Non-Farm Payrolls +315K vs +190K expected",
-        sentiment:"BULL", intensity:4, asset:"BTC/USDT", confidence:0.81,
-        rationale:"Payrolls blow past expectations — risk-on impulse, BTC bid." }, armed:false },
-    { id:"cpi", title:"US CPI (YoY)", ccy:"USD", volatility:5, offsetMin:181,
-      forecast:"3.1%", previous:"3.3%",
-      release:{ tag:"calendar", author:"US BLS", source:"Economic calendar", title:"US CPI 4.2% YoY vs 3.1% expected",
-        sentiment:"BEAR", intensity:4, asset:"BTC/USDT", confidence:0.79,
-        rationale:"Hot inflation surprise — hawkish Fed repricing, risk-off." }, armed:false },
-    { id:"fomc", title:"FOMC rate decision", ccy:"USD", volatility:5, offsetMin:1490,
-      forecast:"5.25%", previous:"5.50%",
-      release:{ tag:"calendar", author:"US Federal Reserve", source:"Economic calendar", title:"FOMC cuts 25bps — surprise dovish cut",
-        sentiment:"BULL", intensity:4, asset:"SOL/USDT", confidence:0.8,
-        rationale:"Surprise dovish cut vs hold — broad risk-on, high-beta alts lead." }, armed:false },
-    { id:"ecb", title:"ECB rate decision", ccy:"EUR", volatility:4, offsetMin:2860,
-      forecast:"3.75%", previous:"3.75%",
-      release:{ tag:"calendar", author:"European Central Bank", source:"Economic calendar", title:"ECB holds rates, signals patience",
-        sentiment:"NEUTRAL", intensity:2, asset:"ETH/USDT", confidence:0.36,
-        rationale:"On-forecast hold with no new guidance — no directional edge." }, armed:false },
-    { id:"claims", title:"US Initial Jobless Claims", ccy:"USD", volatility:3, offsetMin:1330,
-      forecast:"221K", previous:"218K",
-      release:{ tag:"calendar", author:"US DoL", source:"Economic calendar", title:"US Initial Jobless Claims 219K vs 221K expected",
-        sentiment:"NEUTRAL", intensity:1, asset:"BTC/USDT", confidence:0.28,
-        rationale:"In-line labour print — insufficient surprise to trade." }, armed:false }
-  ];
-
-  const state = {
-    kill:false, trades:0, cap:6, pnl:0, cooldowns:{},
-    positions:[], signals:[], orders:[], recent:[], running:false, auto:false
-  };
-
-  // ---- Build pipeline nodes ----
-  const nodesEl = $("#nodes");
-  NODES.forEach(n => {
-    const el = document.createElement("div");
-    el.className = "node"; el.id = "node-"+n; el.dataset.node = n;
-    el.innerHTML =
-      `<div class="node-chip"><div class="node-dot"></div>
-       <div class="node-ic">${ICONS[n]}</div>
-       <div class="node-name">${n}</div>
-       <div class="node-lat"><span class="lat-val"></span></div></div>`;
-    nodesEl.appendChild(el);
+function renderPositions(list){
+  const c=$("#positions");c.innerHTML="";
+  if(!list||!list.length){c.appendChild(el("div","empty","No open positions."));return;}
+  list.forEach(p=>{
+    const long=p.side==="buy",row=el("div","row");
+    row.appendChild(el("span",`pill ${long?"long":"short"}`,long?"LONG ▲":"SHORT ▼"));
+    row.appendChild(el("span","num",p.asset));
+    row.appendChild(el("span","grow muted num",
+      ` @${(+p.entry_price).toLocaleString()}  SL ${(+p.stop_loss_price).toFixed(0)} · TP ${(+p.take_profit_price).toFixed(0)}`));
+    c.appendChild(row);
   });
-  const railLayer=$("#railLayer"), packet=$("#packet"), bypass=$("#bypass"),
-        bypassFill=$("#bypassFill"), pipeline=$("#pipeline"), reasonPill=$("#reasonPill");
-  const edges=[];
-  for(let i=0;i<NODES.length-1;i++){
-    const e=document.createElement("div"); e.className="edge"; e.id="edge-"+i;
-    e.innerHTML='<div class="edge-fill"></div>'; railLayer.appendChild(e); edges.push(e);
-  }
-  function centers(){
-    const pr=pipeline.getBoundingClientRect(), c={};
-    NODES.forEach(n=>{ const r=document.getElementById("node-"+n).querySelector(".node-chip").getBoundingClientRect();
-      c[n]={x:r.left-pr.left+r.width/2, y:r.top-pr.top+r.height/2}; });
-    c._bypassY=pr.height-22; return c;
-  }
-  function layoutEdges(){
-    const c=centers();
-    for(let i=0;i<NODES.length-1;i++){ const a=c[NODES[i]], b=c[NODES[i+1]], e=edges[i];
-      e.style.left=a.x+"px"; e.style.top=(a.y-1.5)+"px"; e.style.width=(b.x-a.x)+"px"; }
-  }
-  function placePacket(x,y){ packet.style.left=(x-7.5)+"px"; packet.style.top=(y-7.5)+"px"; }
-  function packetColor(v){ packet.style.background=`var(${v})`;
-    packet.style.boxShadow=`0 0 0 4px color-mix(in srgb,var(${v}) 22%,transparent),0 0 12px 2px color-mix(in srgb,var(${v}) 55%,transparent)`; }
-  async function movePacket(x,y,dur){ if(reduce()) return;
-    packet.style.transitionDuration=`${dur}ms,${dur}ms,.2s,.2s,.18s`; placePacket(x,y); await sleep(dur); }
-  function setNode(n,cls,lat){ const el=document.getElementById("node-"+n);
-    el.className="node "+cls; if(lat!=null) el.querySelector(".lat-val").textContent=lat+" ms"; }
-  function fillEdge(i,v){ const f=edges[i].querySelector(".edge-fill"); f.style.background=`var(${v})`; f.style.width="100%"; }
+}
+function renderRisk(state){
+  const c=$("#risk");c.innerHTML="";
+  const pct=Math.min(100,(state.trades_last_hour/6)*100);
+  c.appendChild(el("div","kv",`<span class="label">Trades this hour</span><span class="num">${state.trades_last_hour} / 6</span>`));
+  const m=el("div","meter");m.appendChild(el("span",null,""));m.firstChild.style.width=pct+"%";c.appendChild(m);
+  const pnl=state.daily_pnl||0;
+  c.appendChild(el("div","kv",`<span class="label">Daily P&L</span><span class="num ${pnl<0?"bear":"bull"}">${pnl>=0?"+":""}${pnl.toFixed(2)} USDT</span>`));
+  c.appendChild(el("div","kv",`<span class="label">Kill switch</span><span class="num">${state.kill_switch?"🔴 active":"off"}</span>`));
+  c.appendChild(el("div","kv",`<span class="label">Open positions</span><span class="num">${(state.open_positions||[]).join(", ")||"—"}</span>`));
+  $("#kill-btn").textContent="Kill switch: "+(state.kill_switch?"ON":"off");
+  $("#kill-btn").classList.toggle("on",!!state.kill_switch);
+}
+function signalRow(h){
+  const row=el("div","row"),sc={BULL:"bull",BEAR:"bear",NEUTRAL:"neutral"}[h.sentiment]||"neutral";
+  row.appendChild(el("span",null,emojiOf(h.status)));
+  row.appendChild(el("span",sc,`<b>${h.sentiment||"—"}</b>`));
+  row.appendChild(el("span","num muted",h.asset||"—"));
+  row.appendChild(el("span","grow",`<span class="muted" style="font-size:12px">${(h.title||"").slice(0,54)}</span>`));
+  row.appendChild(el("span","num muted",fmtPct(h.confidence)));
+  return row;
+}
+function orderRow(h){
+  const row=el("div","row"),long=h.side==="buy";
+  row.appendChild(el("span",`pill ${long?"long":"short"}`,long?"LONG":"SHORT"));
+  row.appendChild(el("span","num",h.asset||h.symbol||"—"));
+  row.appendChild(el("span","grow num muted",h.avg_price?`@${(+h.avg_price).toLocaleString()}`:""));
+  row.appendChild(el("span","num muted",(h.total_latency_ms!=null?Math.round(h.total_latency_ms)+"ms":"")));
+  return row;
+}
+function prepend(sel,node,cap=40){const c=$(sel);c.insertBefore(node,c.firstChild);
+  while(c.children.length>cap)c.removeChild(c.lastChild);
+  const e=c.querySelector(".empty");if(e&&c.children.length>1)e.remove();}
 
-  function resetPipeline(){
-    NODES.forEach(n=>{ const el=document.getElementById("node-"+n); el.className="node"; el.querySelector(".lat-val").textContent=""; });
-    edges.forEach(e=>e.querySelector(".edge-fill").style.width="0");
-    bypass.classList.remove("show"); bypassFill.style.width="0"; bypassFill.style.background="var(--neutral)";
-    reasonPill.className="reason-pill"; reasonPill.innerHTML=""; packet.style.opacity="0";
-    pipeline.classList.remove("idle");
-  }
-  function idlePipeline(){
-    pipeline.classList.add("idle");
-    $("#eventTag").textContent="idle"; $("#latLabel").textContent="news → order";
-    $("#latValue").textContent="—"; $("#latUnit").textContent=""; $("#latSub").textContent="idle";
-  }
-
-  function decide(sc){
-    const timings={ dedup:iRnd(1,3), analyst:iRnd(300,600), risk:iRnd(1,4), notifier:iRnd(1,2) };
-    const t=Date.now();
-    const dup=state.recent.some(r=>r.title===sc.title && (t-r.t)<8000);
-    state.recent.push({title:sc.title,t}); state.recent=state.recent.filter(r=>t-r.t<9000);
-    if(dup) return { sc, timings, reach:"dedup", status:"skipped_duplicate",
-      reason:`duplicate of a recent event — skipped by <code>dedup</code>` };
-    if(sc.sentiment==="NEUTRAL" || !sc.asset){
-      const why = (sc.tag==="unverified")
-        ? `instruction-override ignored → classified <code>NEUTRAL</code>`
-        : `low-conviction <code>NEUTRAL</code> (conf ${(sc.confidence*100)|0}%) — no trade`;
-      return { sc, timings, reach:"analyst", status:"skipped_neutral", reason:why };
-    }
-    const side = sc.sentiment==="BULL" ? "LONG" : "SHORT";
-    let reject=null;
-    if(state.kill) reject="kill switch active";
-    else if(side==="SHORT" && !state.positions.some(p=>p.asset===sc.asset && p.side==="LONG")) reject="no short on spot position";
-    else if(state.cooldowns[sc.asset] && state.cooldowns[sc.asset]>t) reject="asset in cooldown";
-    else if(state.trades>=state.cap) reject=`hourly trade cap reached (${state.cap}/${state.cap})`;
-    if(reject) return { sc, timings, side, reach:"risk", status:"rejected_risk", reason:`risk veto — <code>${reject}</code>` };
-    const exLat=iRnd(40,120); timings.executor=exLat;
-    const entry=MKT[sc.asset], size=sc.asset==="BTC/USDT"?250:200;
-    return { sc, timings, side, reach:"executor", status:"executed", entry, size, exLat,
-      reason:`order filled on testnet — <code>${side} ${sc.asset}</code>` };
-  }
-  function totalLatency(o){
-    let s=o.timings.dedup;
-    if(o.reach!=="dedup") s+=o.timings.analyst;
-    if(o.reach==="risk"||o.reach==="executor") s+=o.timings.risk;
-    if(o.reach==="executor") s+=o.timings.executor;
-    s+=o.timings.notifier; return s;
-  }
-
-  async function run(sc, opts={}){
-    if(state.running) return;
-    state.running=true; setButtons(true);
-    const note=$("#armedNote");
-    if(opts.via==="calendar"){
-      $("#armedNoteText").innerHTML=`Armed watcher fired · <code>${esc(opts.eventTitle)}</code> released → routing print into the pipeline`;
-      note.classList.add("show");
-    } else note.classList.remove("show");
-
-    resetPipeline(); layoutEdges();
-    const o=decide(sc);
-    $("#eventTag").textContent=sc.tag;
-    $("#eventTitle").textContent=sc.title;
-    $("#eventMeta").innerHTML = opts.via==="calendar"
-      ? `<b>${esc(sc.author)}</b> · via Economic calendar (armed watcher) · ${nowTime()}`
-      : `<b>${esc(sc.author)}</b> · ${esc(sc.source)} · ${nowTime()}`;
-    $("#latLabel").textContent = o.status==="executed" ? "news → order" : "news → decision";
-    $("#latValue").textContent="…"; $("#latUnit").textContent=""; $("#latSub").textContent="processing";
-
-    const c=centers(), stVar=STVAR[o.status];
-    packetColor("--accent"); placePacket(c.dedup.x,c.dedup.y); packet.style.opacity="1";
-    await sleep(reduce()?120:70);
-    setNode("dedup","active",o.timings.dedup);
-    await sleep(reduce()?200:340);
-
-    if(o.status==="skipped_duplicate"){
-      setNode("dedup","s-skipped_duplicate",o.timings.dedup);
-      await branchTo("dedup",c,o);
-    } else {
-      document.getElementById("node-dedup").classList.add("done");
-      if(!reduce()) fillEdge(0,"--accent");
-      await movePacket(c.analyst.x,c.analyst.y,500);
-      document.getElementById("node-analyst").className="node active thinking";
-      await sleep(reduce()?250:820);
-      setNode("analyst","active",o.timings.analyst);
-      pushSignal(sc,o);
-      await sleep(reduce()?150:260);
-      if(o.status==="skipped_neutral"){
-        setNode("analyst","s-skipped_neutral",o.timings.analyst);
-        await branchTo("analyst",c,o);
-      } else {
-        document.getElementById("node-analyst").classList.add("done");
-        if(!reduce()) fillEdge(1,"--accent");
-        await movePacket(c.risk.x,c.risk.y,460);
-        setNode("risk","active",o.timings.risk);
-        await sleep(reduce()?220:440);
-        if(o.status==="rejected_risk"){
-          setNode("risk","s-rejected_risk",o.timings.risk);
-          await branchTo("risk",c,o);
-        } else {
-          document.getElementById("node-risk").classList.add("done");
-          if(!reduce()) fillEdge(2,"--accent");
-          await movePacket(c.executor.x,c.executor.y,460);
-          setNode("executor","active",o.timings.executor);
-          await sleep(reduce()?220:460);
-          setNode("executor","s-executed",o.timings.executor);
-          pushOrder(sc,o);
-          document.getElementById("node-executor").classList.add("done");
-          fillEdge(3,stVar);
-          await movePacket(c.notifier.x,c.notifier.y,480);
-          setNode("notifier","s-executed",o.timings.notifier);
-        }
-      }
-    }
-
-    const total=totalLatency(o);
-    $("#latValue").textContent=(total/1000).toFixed(1); $("#latUnit").textContent="s";
-    $("#latSub").textContent=`${total} ms total · ${STATUS[o.status].em} ${STATUS[o.status].label}`;
-    reasonPill.className="reason-pill show";
-    reasonPill.style.color=`var(${stVar}-ink)`;
-    reasonPill.style.background=`var(${stVar}-weak)`;
-    reasonPill.style.borderColor=`color-mix(in srgb,var(${stVar}) 30%,transparent)`;
-    reasonPill.innerHTML=`<span class="em">${STATUS[o.status].em}</span><span>${o.reason}</span>`;
-    packet.style.opacity="0";
-    updatePnl();
-    await sleep(1500);
-    note.classList.remove("show");
-    state.running=false; setButtons(false); idlePipeline();
-  }
-
-  async function branchTo(fromNode,c,o){
-    const from=c[fromNode], notif=c.notifier, by=c._bypassY, stVar=STVAR[o.status];
-    bypass.style.left=from.x+"px"; bypass.style.top=by+"px"; bypass.style.width=(notif.x-from.x)+"px";
-    bypass.classList.add("show"); bypassFill.style.background=`var(${stVar})`; packetColor(stVar);
-    if(reduce()){ setNode("notifier","s-"+o.status,o.timings.notifier); return; }
-    await movePacket(from.x,by,300);
-    bypassFill.style.width="100%";
-    await movePacket(notif.x,by,620);
-    await movePacket(notif.x,notif.y,300);
-    setNode("notifier","s-"+o.status,o.timings.notifier);
-  }
-
-  // ---- Feeds & panels ----
-  const sentGlyph=x=>x==="BULL"?ARROW_UP:x==="BEAR"?ARROW_DN:SQ;
-  const stars=n=>{let h="";for(let i=1;i<=5;i++)h+=`<span class="${i<=n?'':'off'}">★</span>`;return h;};
-  function emptyBlock(t,s){ return `<div class="empty"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M8 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-    <div style="font-weight:600;color:var(--muted)">${t}</div><div style="margin-top:2px">${s}</div></div>`; }
-
-  function pushSignal(sc,o){
-    state.signals.unshift({ sentiment:sc.sentiment, asset:sc.asset||"—", intensity:sc.intensity,
-      confidence:sc.confidence, rationale:sc.rationale, status:o.status, time:nowTime() });
-    state.signals=state.signals.slice(0,50); renderSignals();
-  }
-  function renderSignals(){
-    const f=$("#signals"); $("#sigCount").textContent=state.signals.length;
-    if(!state.signals.length){ f.innerHTML=emptyBlock("No signals yet","Analyst classifications appear here."); return; }
-    f.innerHTML=state.signals.map(x=>`
-      <div class="feed-row">
-        <div class="feed-ic">${STATUS[x.status].em}</div>
-        <div class="feed-main">
-          <div class="feed-top">
-            <span class="sent-pill sent-${x.sentiment}">${sentGlyph(x.sentiment)}${x.sentiment}</span>
-            <span class="feed-asset">${x.asset}</span>
-            <span class="stars" title="intensity ${x.intensity}/5">${stars(x.intensity)}</span>
-            <span class="conf">${Math.round(x.confidence*100)}%</span>
-            <span class="status-chip st-${x.status}"><span class="em">${STATUS[x.status].em}</span>${STATUS[x.status].label}</span>
-          </div>
-          <div class="feed-rationale" title="${esc(x.rationale)}">${esc(x.rationale)}</div>
-          <div class="feed-time">${x.time}</div>
-        </div>
-      </div>`).join("");
-  }
-  function pushOrder(sc,o){
-    const item={ asset:sc.asset, side:o.side, size:o.size, avg:o.entry, lat:o.exLat, status:"executed",
-      time:nowTime(), oid:"o_"+Math.random().toString(36).slice(2,8) };
-    state.orders.unshift(item); state.orders=state.orders.slice(0,50); renderOrders();
-    const sl=+(o.entry*0.98).toFixed(2), tp=+(o.entry*1.04).toFixed(2);
-    state.positions.unshift({ asset:sc.asset, side:o.side, entry:o.entry, size:o.size, sl, tp, opened:nowTime() });
-    renderPositions();
-    state.trades++; renderGauge();
-    state.cooldowns[sc.asset]=Date.now()+45000; renderCooldowns();
-    state.pnl += rnd(-4,14);
-  }
-  function renderOrders(){
-    const f=$("#orders"); $("#ordCount").textContent=state.orders.length;
-    if(!state.orders.length){ f.innerHTML=emptyBlock("No orders yet","Filled testnet orders appear here."); return; }
-    f.innerHTML=state.orders.map(x=>`
-      <div class="feed-row">
-        <div class="feed-ic">${STATUS[x.status].em}</div>
-        <div class="feed-main">
-          <div class="feed-top">
-            <span class="feed-asset">${x.asset}</span>
-            <span class="side-pill side-${x.side.toLowerCase()}">${x.side==='LONG'?ARROW_UP:ARROW_DN}${x.side}</span>
-            <span class="status-chip st-${x.status}"><span class="em">${STATUS[x.status].em}</span>filled</span>
-          </div>
-          <div class="ord-nums"><span>size <b>$${x.size}</b></span><span>avg <b>${price(x.avg)}</b></span><span>fill lat <b>${x.lat} ms</b></span></div>
-          <div class="feed-time">${x.time} · ${x.oid}</div>
-        </div>
-      </div>`).join("");
-  }
-  function renderPositions(){
-    const p=$("#positions"); $("#posCount").textContent=state.positions.length;
-    if(!state.positions.length){ p.innerHTML=emptyBlock("No open positions","Executed orders open here with SL / TP levels."); return; }
-    p.innerHTML=state.positions.map(x=>`
-      <div class="pos-row">
-        <div>
-          <div class="pos-main"><span class="asset">${x.asset}</span>
-            <span class="side-pill side-${x.side.toLowerCase()}">${x.side==='LONG'?ARROW_UP:ARROW_DN}${x.side}</span></div>
-          <div class="pos-meta"><span>entry <span class="mono">${price(x.entry)}</span></span>
-            <span>size <span class="mono">$${x.size}</span></span><span>opened <span class="mono">${x.opened}</span></span></div>
-        </div>
-        <div class="pos-side-vals"><div><span class="lbl">SL</span><span class="sl">${price(x.sl)}</span></div>
-          <div style="margin-top:4px"><span class="lbl">TP</span><span class="tp">${price(x.tp)}</span></div></div>
-      </div>`).join("");
-  }
-  function renderGauge(){
-    const g=$("#gauge"); $("#tradesNow").textContent=state.trades;
-    const n=Math.min(state.trades,state.cap);
-    g.className="gauge"+(n>=state.cap?" full":n>=4?" warn":"");
-    g.innerHTML=""; for(let i=0;i<state.cap;i++){ const d=document.createElement("div"); d.className="seg"+(i<n?" on":""); g.appendChild(d); }
-  }
-  function renderCooldowns(){
-    const el=$("#cooldowns"), now=Date.now();
-    const active=Object.entries(state.cooldowns).filter(([,e])=>e>now);
-    if(!active.length){ el.innerHTML='<span class="none">No assets in cooldown</span>'; return; }
-    el.innerHTML=active.map(([a,e])=>`<span class="cool-chip"><span class="cd-dot"></span>${a.split("/")[0]} · ${Math.ceil((e-now)/1000)}s</span>`).join("");
-  }
-  function updatePnl(){
-    const el=$("#pnl"); el.classList.toggle("pos",state.pnl>=0); el.classList.toggle("neg",state.pnl<0);
-    $("#pnlArrow").innerHTML = state.pnl>=0
-      ? '<path d="M5 12l7-7 7 7M12 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
-      : '<path d="M5 12l7 7 7-7M12 19V5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
-    $("#pnlVal").textContent=money(state.pnl);
-  }
-  setInterval(()=>{ renderCooldowns();
-    Object.keys(state.cooldowns).forEach(k=>{ if(state.cooldowns[k]<=Date.now()) delete state.cooldowns[k]; });
-    if(!$("#viewSources").hidden) renderCalendar(); }, 1000);
-
-  // ---- Kill switch ----
-  const killBtn=$("#killBtn");
-  killBtn.addEventListener("click",()=>{
-    state.kill=!state.kill; killBtn.setAttribute("aria-pressed",String(state.kill));
-    $("#killLabel").textContent = state.kill?"Kill switch ON":"Kill switch";
-    const b=$("#ksBadge"); b.className="ks-badge "+(state.kill?"active":"armed");
-    b.textContent = state.kill?"ACTIVE · halted":"ARMED · executing";
-    const hd=$("#healthDot"), ht=$("#healthText");
-    if(state.kill){ hd.className="dot bad"; ht.textContent="Halted"; } else { hd.className="dot live"; ht.textContent="Live"; }
-  });
-
-  // ---- Demo buttons ----
-  const btnRow=$("#btnRow");
-  ORDER.forEach(key=>{
-    const s=SCEN[key], b=document.createElement("button");
-    b.className="inject-btn tone-"+s.tone; b.dataset.key=key;
-    b.innerHTML=`<span class="ib-ic">${key==="prompt_injection"
-      ? '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3 5 6v5c0 4.2 2.9 6.6 7 7.8 4.1-1.2 7-3.6 7-7.8V6l-7-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 8v4m0 3h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>'
-      : ICONS.analyst}</span>
-      <span class="ib-txt"><span class="ib-title">${s.label}</span><span class="ib-sub">${s.sub}</span></span>`;
-    b.addEventListener("click",()=>run(SCEN[key]));
-    btnRow.appendChild(b);
-  });
-  const autoBtn=document.createElement("button");
-  autoBtn.className="inject-btn auto-btn"; autoBtn.setAttribute("aria-pressed","false");
-  autoBtn.innerHTML=`<span class="ib-ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 0 1 13.7-5.7L20 8M20 4v4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 12a8 8 0 0 1-13.7 5.7L4 16M4 20v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-    <span class="ib-txt"><span class="ib-title" id="autoTitle">Auto-replay</span><span class="ib-sub">loop all scenarios</span></span>`;
-  btnRow.appendChild(autoBtn);
-  function setButtons(d){ btnRow.querySelectorAll(".inject-btn:not(.auto-btn)").forEach(b=>b.disabled=d); }
-  let autoIdx=0;
-  autoBtn.addEventListener("click", ()=>{
-    state.auto=!state.auto; autoBtn.setAttribute("aria-pressed",String(state.auto));
-    $("#autoTitle").textContent=state.auto?"Stop replay":"Auto-replay";
-    if(state.auto) loop();
-  });
-  async function loop(){ while(state.auto){ if(!state.running){ await run(SCEN[ORDER[autoIdx%ORDER.length]]); autoIdx++; } await sleep(900); } }
-
-  // ---- View switching ----
-  const tabHome=$("#tabHome"), tabSources=$("#tabSources"), viewHome=$("#viewHome"), viewSources=$("#viewSources");
-  function setView(v){
-    const home=v==="home";
-    tabHome.setAttribute("aria-selected",String(home)); tabSources.setAttribute("aria-selected",String(!home));
-    viewHome.hidden=!home; viewSources.hidden=home;
-    if(home){ requestAnimationFrame(()=>{ layoutEdges(); if(!state.running){ const c=centers(); placePacket(c.dedup.x,c.dedup.y); } }); }
-    else renderCalendar();
-  }
-  tabHome.addEventListener("click",()=>setView("home"));
-  tabSources.addEventListener("click",()=>setView("sources"));
-
-  // ---- Sources render ----
-  function renderSources(){
-    const g=$("#srcGrid"); g.innerHTML="";
-    SOURCES.forEach(s=>{
-      const card=document.createElement("div"); card.className="src-card"+(s.enabled?"":" off");
-      card.innerHTML=`
-        <div class="src-top">
-          <div style="flex:1;min-width:0">
-            <div class="src-name">${s.recommended?'<span class="rec-star" title="Recommended">★</span>':''}${esc(s.name)}</div>
-            <div style="margin-top:5px"><span class="kind-badge kind-${s.kind}">${s.kind}</span></div>
-          </div>
-          <button class="tgl" role="switch" aria-checked="${s.enabled}" aria-label="Toggle ${esc(s.name)}"></button>
-        </div>
-        <div class="src-desc">${esc(s.description)}</div>
-        <div class="src-chips">
-          <span class="cost-chip">${s.cost}</span>
-          <span class="react-chip${s.fragile?' fragile':''}"><span class="rdot"></span>${esc(s.reactivity)}</span>
-        </div>
-        ${s.notes?`<div class="src-note">Note: ${esc(s.notes)}</div>`:''}
-        <div class="src-foot"><span class="src-state ${s.enabled?'on':''}">${s.enabled?'● live':'○ disabled'}</span></div>`;
-      const tgl=card.querySelector(".tgl");
-      tgl.addEventListener("click",()=>{
-        s.enabled=!s.enabled; tgl.setAttribute("aria-checked",String(s.enabled));
-        card.classList.toggle("off",!s.enabled);
-        const st=card.querySelector(".src-state"); st.className="src-state "+(s.enabled?"on":""); st.textContent=s.enabled?'● live':'○ disabled';
-        updateSrcNote();
-      });
-      g.appendChild(card);
+async function loadSources(){
+  try{
+    const {sources}=await api("/api/sources"),c=$("#sources");c.innerHTML="";
+    sources.forEach(s=>{
+      const row=el("div","src");
+      row.appendChild(el("div","grow",
+        `<div><b>${s.name}</b> <span class="chip">${s.kind}</span> <span class="chip">${s.cost}</span></div>
+         <div class="muted" style="font-size:12px">${s.description}</div>
+         <div class="muted" style="font-size:11px">reactivity: ${s.reactivity}${s.notes?" · "+s.notes:""}</div>`));
+      const tg=el("button","toggle"+(s.enabled?" on":""));
+      tg.onclick=async()=>{try{const r=await api(`/admin/sources/${s.id}/toggle`,{enabled:!s.enabled});
+        s.enabled=r.enabled;tg.classList.toggle("on",r.enabled);}catch(e){}};
+      row.appendChild(tg);c.appendChild(row);
     });
-    updateSrcNote();
-  }
-  function updateSrcNote(){ $("#srcNote").textContent=`${SOURCES.filter(s=>s.enabled).length} of ${SOURCES.length} live`; }
+  }catch(e){}
+}
+async function loadCalendar(){
+  const c=$("#calendar");
+  try{
+    const {events}=await api("/api/calendar/upcoming");c.innerHTML="";
+    if(!events||!events.length){c.appendChild(el("div","empty","No upcoming events (set ECON_CALENDAR_URL to populate)."));return;}
+    events.slice(0,12).forEach(ev=>{
+      const row=el("div","src"),when=new Date(ev.when).toLocaleString();
+      row.appendChild(el("span","num","★".repeat(ev.volatility)));
+      row.appendChild(el("div","grow",
+        `<div><b>${ev.title}</b> <span class="muted num">${ev.currency||""}</span></div>
+         <div class="muted" style="font-size:12px">${when} · fc ${ev.forecast||"—"} · prev ${ev.previous||"—"}</div>`));
+      const b=el("button","btn"+(ev.armed?" on":""),ev.armed?"Armed":"Arm");
+      b.onclick=async()=>{try{const r=await api("/admin/calendar/arm",{event_id:ev.id,armed:!ev.armed});
+        ev.armed=r.armed;b.textContent=ev.armed?"Armed":"Arm";b.classList.toggle("on",ev.armed);}catch(e){}};
+      row.appendChild(b);c.appendChild(row);
+    });
+  }catch(e){c.innerHTML="";c.appendChild(el("div","empty","Calendar unavailable."));}
+}
 
-  // ---- Calendar render ----
-  function fmtCountdown(mins){
-    if(mins<=0) return "due now";
-    const d=Math.floor(mins/1440), h=Math.floor((mins%1440)/60), m=mins%60;
-    if(d>0) return `in ${d}d ${h}h`; if(h>0) return `in ${h}h ${m}m`; return `in ${m}m`;
+let resetTimer=null;
+function onWs(msg){
+  const t=msg.type,p=msg.payload||{},tim=msg.timings_ms||{};
+  if(t==="event_received"){
+    clearTimeout(resetTimer);resetPipe();
+    nodeEls.dedup.classList.add("active");
+    $("#pl-title").textContent=p.title||"…";$("#pl-badge").innerHTML="";$("#lat-big").textContent="…";
+  }else if(t==="signal"){
+    nodeEls.dedup.classList.add("done");litEdge(1);
+    nodeEls.analyst.classList.add("active","thinking");
+    const sc={BULL:"bull",BEAR:"bear",NEUTRAL:"neutral"}[p.sentiment]||"neutral";
+    nodeEls.analyst.querySelector(".lat").innerHTML=`<span class="${sc}">${p.sentiment} ${p.asset||""}</span>`;
+  }else if(t==="risk_verdict"){
+    nodeEls.analyst.classList.remove("thinking");nodeEls.analyst.classList.add("done");litEdge(2);
+    nodeEls.risk.classList.add("active");
+    nodeEls.risk.querySelector(".lat").textContent=p.approved?`${p.side} ✓`:(p.reject_reason||"rejected").slice(0,22);
+  }else if(t==="order"){
+    nodeEls.risk.classList.add("done");litEdge(3);
+    nodeEls.executor.classList.add("active","done");
+    nodeEls.executor.querySelector(".lat").textContent=`${p.side} ${p.symbol}`;
+    litEdge(4);nodeEls.notifier.classList.add("active");
+    prepend("#orders",orderRow({...p,asset:p.symbol}));
+  }else if(t==="pipeline_done"){
+    NODES.forEach(n=>{if(tim[n]!=null)nodeEls[n].querySelector(".lat").textContent=tim[n].toFixed(1)+"ms";});
+    nodeEls.analyst.classList.remove("thinking");nodeEls.notifier.classList.add("done");
+    $("#lat-big").textContent=(p.total_latency_ms!=null?(p.total_latency_ms/1000).toFixed(2)+"s":"—");
+    $("#pl-badge").innerHTML=`<span class="badge ${badgeClass(p.status)}">${emojiOf(p.status)} ${(p.status||"").toUpperCase()}</span>`;
+    $("#pl-title").textContent=(p.title||"")+(p.reject_reason?` — ${p.reject_reason}`:"");
+    if(p.sentiment)prepend("#signals",signalRow(p));
+    refreshState();
+    resetTimer=setTimeout(()=>{resetPipe();$("#lat-big").textContent="—";
+      $("#pl-title").textContent="Waiting for the next event…";$("#pl-badge").innerHTML="";},6000);
   }
-  function fmtAbs(mins){
-    const dt=new Date(Date.now()+mins*60000);
-    return dt.toLocaleString("en-GB",{weekday:"short",hour:"2-digit",minute:"2-digit"});
-  }
-  function renderCalendar(){
-    const list=$("#calList"); const sorted=[...CAL].sort((a,b)=>b.volatility-a.volatility||a.offsetMin-b.offsetMin);
-    list.innerHTML=sorted.map(ev=>{
-      const vcls=ev.volatility>=5?"v5":ev.volatility>=4?"":"v3";
-      const bars=[1,2,3,4,5].map(i=>`<span class="vb${i<=ev.volatility?' on':''}"></span>`).join("");
-      const right = ev.armed
-        ? `<span class="primed-chip"><span class="pdot"></span>PRIMED · watching</span>`
-        : `<span class="cal-when"><span class="cd">${fmtCountdown(ev.offsetMin)}</span><span class="abs">${fmtAbs(ev.offsetMin)}</span></span>`;
-      return `<div class="cal-row${ev.armed?' armed':''}" data-id="${ev.id}">
-        <div class="cal-main">
-          <div class="cal-title">${esc(ev.title)} <span class="ccy">${ev.ccy}</span>
-            <span class="vol-meter ${vcls}" title="expected volatility ${ev.volatility}/5" aria-label="volatility ${ev.volatility} of 5">${bars}</span></div>
-          <div class="cal-sub"><span>${fmtCountdown(ev.offsetMin)} · ${fmtAbs(ev.offsetMin)}</span><span>forecast <b>${ev.forecast}</b></span><span>previous <b>${ev.previous}</b></span></div>
-        </div>
-        ${right}
-        <div class="cal-actions">
-          <button class="arm-btn" data-arm="${ev.id}" aria-pressed="${ev.armed}">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="${ev.armed?'currentColor':'none'}" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-            ${ev.armed?'Armed':'Arm'}</button>
-          ${ev.armed?`<button class="release-btn" data-fire="${ev.id}">Simulate release</button>`:''}
-        </div>
-      </div>`;
-    }).join("");
-    list.querySelectorAll("[data-arm]").forEach(b=>b.addEventListener("click",()=>toggleArm(b.dataset.arm)));
-    list.querySelectorAll("[data-fire]").forEach(b=>b.addEventListener("click",()=>fireCalendar(b.dataset.fire)));
-    const armed=CAL.filter(e=>e.armed).length;
-    $("#calNote").textContent=`${armed} armed`;
-    const nav=$("#navArm"); nav.hidden=armed===0; nav.textContent=armed;
-  }
-  function toggleArm(id){ const ev=CAL.find(e=>e.id===id); if(ev){ ev.armed=!ev.armed; renderCalendar(); } }
-  async function fireCalendar(id){
-    const ev=CAL.find(e=>e.id===id); if(!ev||state.running) return;
-    setView("home"); await raf();
-    await run(ev.release, {via:"calendar", eventTitle:ev.title});
-    ev.armed=false; renderCalendar();
-  }
+}
+function connectWs(){
+  const proto=location.protocol==="https:"?"wss":"ws";
+  const ws=new WebSocket(`${proto}://${location.host}/ws/live`);
+  ws.onmessage=e=>{try{onWs(JSON.parse(e.data));}catch(_){}};
+  ws.onclose=()=>{$("#mode-chip").textContent="reconnecting…";setTimeout(connectWs,1500);};
+  ws.onopen=()=>hydrate();
+}
 
-  // ---- init ----
-  renderSignals(); renderOrders(); renderPositions(); renderGauge(); renderCooldowns(); updatePnl();
-  renderSources(); renderCalendar();
-  requestAnimationFrame(()=>{ layoutEdges(); const c=centers(); placePacket(c.dedup.x,c.dedup.y); });
-  window.addEventListener("resize",()=>{ if(!viewHome.hidden){ layoutEdges(); if(!state.running){ const c=centers(); placePacket(c.dedup.x,c.dedup.y); } } });
-  const hd=$("#healthDot"), ht=$("#healthText"); hd.className="dot warn"; ht.textContent="Connecting…";
-  setTimeout(()=>{ if(!state.kill){ hd.className="dot live"; ht.textContent="Live"; } }, 850);
-})();
+async function refreshState(){try{const d=await api("/api/positions");renderPositions(d.positions);renderRisk(d.state);}catch(e){}}
+async function hydrate(){
+  try{const h=await api("/api/health");$("#health-dot").className="dot ok";
+    $("#mode-chip").textContent=`${h.exchange_id} · ${h.llm_provider}`;}catch(e){$("#health-dot").className="dot off";}
+  try{const s=await api("/api/signals");s.signals.slice(0,20).reverse().forEach(x=>prepend("#signals",signalRow(x)));}catch(e){}
+  try{const o=await api("/api/orders");o.orders.slice(0,20).reverse().forEach(x=>prepend("#orders",orderRow(x)));}catch(e){}
+  refreshState();loadSources();loadCalendar();
+}
+
+$("#kill-btn").onclick=async()=>{
+  const on=$("#kill-btn").classList.contains("on");
+  try{await api("/admin/killswitch",{active:!on,reason:"manual (dashboard)"});}catch(e){}refreshState();
+};
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");
+  const tab=t.dataset.tab;
+  $("#tab-cockpit").classList.toggle("hide",tab!=="cockpit");
+  $("#tab-sources").classList.toggle("hide",tab!=="sources");
+  if(tab==="sources"){loadSources();loadCalendar();}
+});
+
+renderPositions([]);connectWs();setInterval(refreshState,4000);
 </script>
+</body>
+</html>
