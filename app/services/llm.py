@@ -46,11 +46,16 @@ _INJECTION_MARKERS = (
 _BULL_KEYWORDS = (
     "reserve", "approve", "approval", "etf", "adopt", "capital", "partnership",
     "buys", "accumulat", "rally", "surge", "inflow",
+    # Geopolitical de-escalation → risk-on relief rally.
+    "ceasefire", "peace deal", "de-escalat",
 )
 _BEAR_KEYWORDS = (
     "cpi", "inflation", "hack", "ban", "lawsuit", "crash", "denied", "hawkish",
     # Past-tense/specific verbs avoid negation collisions like "never sell".
     "sold", "dump", "offload", "liquidat", "outflow", "plunge",
+    # Geopolitical risk-off: military escalation drives risk assets down.
+    "war", "attack", "strike", "bomb", "missile", "invasion", "escalat",
+    "retaliat", "nuclear", "shoot",
 )
 _ASSET_KEYWORDS = {
     "solana": "SOL/USDT",
@@ -71,6 +76,10 @@ _MACRO_KEYWORDS = (
     "fed", "fomc", "cpi", "inflation", "rate", "rates", "jobs", "payroll", "nfp",
     "tariff", "sec", "regulat", "etf", "crypto", "bitcoin", "ether", "treasury",
     "sanction", "gdp", "unemployment", "stablecoin",
+    # Geopolitical / political figures whose statements routinely move markets.
+    "trump", "war", "iran", "attack", "military", "strike", "missile", "bomb",
+    "invasion", "conflict", "nuclear", "geopolit", "escalat", "ceasefire",
+    "peace deal", "retaliat",
 )
 
 

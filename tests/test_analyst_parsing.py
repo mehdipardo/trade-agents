@@ -149,6 +149,24 @@ def test_relevance_prefilter_gates_noise() -> None:
     assert is_relevant(_event("New podcast episode released"), s) is False
 
 
+def test_relevance_prefilter_passes_geopolitical() -> None:
+    from app.services.llm import is_relevant
+
+    s = _settings()
+    assert is_relevant(_event("Trump: We will hit Iran again tonight"), s) is True
+    assert is_relevant(_event("US launches missile strike on military targets"), s) is True
+
+
+def test_offline_catches_trump_iran_as_bear() -> None:
+    sig = offline_keyword_classify(
+        _event("Trump threatens military strike on Iran tonight",
+               "BREAKING: Markets rattled as President escalates military conflict. War fears."),
+        _settings(),
+    )
+    assert sig.sentiment == "BEAR"
+    assert sig.asset == "BTC/USDT"
+
+
 async def test_analyze_prefilters_noise_without_llm() -> None:
     # Auto path (no injected llm): irrelevant news never reaches the LLM.
     sig = await analyze(_event("New podcast episode released"), _settings())

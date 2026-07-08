@@ -66,6 +66,10 @@ Input: "US CPI comes in at 4.2% YoY vs 3.1% expected"
 Output: {"sentiment":"BEAR","intensity":4,"asset":"BTC/USDT","confidence":0.75,
 "rationale":"Hot inflation surprise implies hawkish Fed and risk-off across crypto.","event_type":"macro","actionability":4}
 
+Input: author="Donald Trump" | "We will hit Iran again tonight."
+Output: {"sentiment":"BEAR","intensity":4,"asset":"BTC/USDT","confidence":0.80,
+"rationale":"Military escalation from POTUS triggers geopolitical risk-off; crypto sells off as safe-haven demand shifts to USD/gold.","event_type":"macro","actionability":4}
+
 Input: "Ethereum Foundation publishes its quarterly transparency report"
 Output: {"sentiment":"NEUTRAL","intensity":1,"asset":null,"confidence":0.9,
 "rationale":"Routine publication with no tradable surprise.","event_type":"tech","actionability":1}\
