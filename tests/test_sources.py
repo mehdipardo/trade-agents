@@ -27,7 +27,7 @@ from app.sources.watcher import (
 
 def test_catalog_has_recommended_econ_default_on() -> None:
     ids = {s.id for s in catalog.list_specs()}
-    assert {"econ_calendar", "trump_truthsocial", "sec_press", "congress_bills"} <= ids
+    assert {"econ_calendar", "trump_truthsocial", "congress_bills"} <= ids
     assert catalog.is_enabled("econ_calendar") is True  # default on
 
 
@@ -154,6 +154,32 @@ async def test_poll_once_emits_when_released(monkeypatch: pytest.MonkeyPatch) ->
     assert not watcher.is_armed("cpi")  # disarmed after emit
 
 
+async def test_refresh_and_auto_arm_only_arms_medium_and_higher(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    watcher.reset_state()
+    now = datetime.now(UTC)
+    events = [
+        CalendarEvent(id="low", title="minor", when=now + timedelta(hours=1),
+                      impact="Low", volatility=1),
+        CalendarEvent(id="med", title="ISM", when=now + timedelta(hours=1),
+                      impact="Medium", volatility=3),
+        CalendarEvent(id="hi", title="NFP", when=now + timedelta(hours=1),
+                      impact="High", volatility=5),
+        # Past-window event should never be armed.
+        CalendarEvent(id="past", title="old", when=now - timedelta(hours=2),
+                      impact="High", volatility=5),
+    ]
+
+    async def fake_fetch(url: str):  # noqa: ANN001
+        return events
+
+    monkeypatch.setattr(watcher, "fetch_calendar", fake_fetch)
+    await watcher._refresh_and_auto_arm("http://x")
+    armed_ids = {e.id for e in watcher.armed()}
+    assert armed_ids == {"med", "hi"}
+
+
 # --- API ------------------------------------------------------------------
 
 
@@ -177,7 +203,40 @@ def test_sources_and_toggle_endpoints(client: TestClient) -> None:
     assert client.post("/admin/sources/nope/toggle", json={"enabled": True}).status_code == 404
 
 
-def test_calendar_and_arm_endpoints(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_source_config_save_auto_enables_and_restarts(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Congress needs both an api key and tracked bills; saving both should
+    # auto-enable the source (was default off).
+    r = client.post(
+        "/admin/sources/congress_bills/config",
+        json={"values": {"congress_api_key": "test-key", "congress_tracked_bills": "119/hr/1"}},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["enabled"] is True
+    # /api/sources now lists it as enabled with masked secret + has_value on both fields.
+    sources = client.get("/api/sources").json()["sources"]
+    congress = next(s for s in sources if s["id"] == "congress_bills")
+    assert congress["enabled"] is True
+    assert congress["needs_config"] is False
+    fields = {f["name"]: f for f in congress["config_fields"]}
+    assert fields["congress_api_key"]["has_value"] is True
+    assert fields["congress_api_key"]["value"].startswith("••••")
+    assert fields["congress_tracked_bills"]["value"] == "119/hr/1"
+
+
+def test_source_config_rejects_unknown_field(client: TestClient) -> None:
+    r = client.post(
+        "/admin/sources/trump_truthsocial/config",
+        json={"values": {"bogus_field": "x"}},
+    )
+    assert r.status_code == 400
+
+
+def test_calendar_endpoint_returns_upcoming(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     now = datetime.now(UTC)
     ev = CalendarEvent(
         id="nfp1", title="NFP", when=now + timedelta(hours=2), impact="High", volatility=5
@@ -188,9 +247,6 @@ def test_calendar_and_arm_endpoints(client: TestClient, monkeypatch: pytest.Monk
 
     monkeypatch.setattr("app.api.routes_sources.fetch_calendar", fake_fetch)
     upcoming = client.get("/api/calendar/upcoming").json()["events"]
-    assert upcoming and upcoming[0]["id"] == "nfp1" and upcoming[0]["armed"] is False
-
-    armed = client.post("/admin/calendar/arm", json={"event_id": "nfp1", "armed": True})
-    assert armed.status_code == 200 and armed.json()["armed"] is True
-    # Unknown id (not cached) -> 404.
-    assert client.post("/admin/calendar/arm", json={"event_id": "zzz"}).status_code == 404
+    assert upcoming and upcoming[0]["id"] == "nfp1"
+    # `armed` is informational (auto-armed by the watcher loop, not by the endpoint).
+    assert "armed" in upcoming[0]

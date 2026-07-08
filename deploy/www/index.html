@@ -103,7 +103,20 @@
   .tv-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
   .tv-label{display:flex;align-items:center;gap:10px;margin-bottom:8px}
   .tv-label .sym{font-family:var(--mono);font-weight:700;font-size:15px}
-  .src{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+  .src{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line);
+    flex-wrap:wrap}
+  .src-config{width:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;
+    padding:8px 0 4px;margin-top:2px}
+  .src-config .fld{display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px}
+  .src-config label{font-size:11px;color:var(--muted);font-weight:600}
+  .src-config input{font:inherit;font-family:var(--mono);font-size:12px;
+    padding:7px 10px;border-radius:8px;border:1px solid var(--line);
+    background:var(--card);color:var(--ink);width:100%}
+  .src-config input:focus{outline:none;border-color:var(--accent);
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
+  .src-config .hint{font-size:10px;color:var(--muted)}
+  .src-run{width:8px;height:8px;border-radius:50%;background:var(--gray);flex:none}
+  .src-run.on{background:var(--green)} .src-run.setup{background:var(--amber)}
   .toggle{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;
     cursor:pointer;flex:none;transition:.2s;border:none}
   .toggle.on{background:var(--green)}
@@ -177,7 +190,8 @@
     <div class="card pad">
       <h3>Economic calendar · ranked by volatility</h3>
       <div class="muted" style="font-size:13px;margin-bottom:6px">
-        Arming an event pre-positions a watcher that fires the print into the pipeline at release.</div>
+        Every event with volatility ≥ ★★★ is auto-watched. Feed refreshes every 15 min
+        from Forex Factory. Releases fire straight into the pipeline; the LLM triages impact.</div>
       <div id="calendar"></div>
     </div>
   </section>
@@ -330,19 +344,60 @@ function prepend(sel,node,cap=40){const c=$(sel);c.insertBefore(node,c.firstChil
   while(c.children.length>cap)c.removeChild(c.lastChild);
   const e=c.querySelector(".empty");if(e&&c.children.length>1)e.remove();}
 
+function _srcStatusChip(s){
+  if(s.running)return `<span class="chip" style="color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,var(--line))">running</span>`;
+  if(s.needs_config)return `<span class="chip" style="color:var(--amber);border-color:color-mix(in srgb,var(--amber) 40%,var(--line))">needs setup</span>`;
+  return `<span class="chip">stopped</span>`;
+}
 async function loadSources(){
   try{
     const {sources}=await api("/api/sources"),c=$("#sources");c.innerHTML="";
     sources.forEach(s=>{
       const row=el("div","src");
+      const dot=`<span class="src-run ${s.running?"on":(s.needs_config?"setup":"")}"></span>`;
       row.appendChild(el("div","grow",
-        `<div><b>${s.name}</b> <span class="chip">${s.kind}</span> <span class="chip">${s.cost}</span></div>
-         <div class="muted" style="font-size:12px">${s.description}</div>
+        `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+           ${dot}<b>${s.name}</b>
+           <span class="chip">${s.kind}</span><span class="chip">${s.cost}</span>${_srcStatusChip(s)}
+         </div>
+         <div class="muted" style="font-size:12px;margin-top:4px">${s.description}</div>
          <div class="muted" style="font-size:11px">reactivity: ${s.reactivity}${s.notes?" · "+s.notes:""}</div>`));
       const tg=el("button","toggle"+(s.enabled?" on":""));
+      tg.title=s.enabled?"Click to disable":"Click to enable";
       tg.onclick=async()=>{try{const r=await api(`/admin/sources/${s.id}/toggle`,{enabled:!s.enabled});
-        s.enabled=r.enabled;tg.classList.toggle("on",r.enabled);}catch(e){}};
-      row.appendChild(tg);c.appendChild(row);
+        s.enabled=r.enabled;tg.classList.toggle("on",r.enabled);loadSources();}catch(e){}};
+      row.appendChild(tg);
+
+      // Config inputs (if the source declares any).
+      if(s.config_fields&&s.config_fields.length){
+        const form=el("div","src-config");
+        s.config_fields.forEach(f=>{
+          const wrap=el("div","fld");
+          wrap.appendChild(el("label",null,f.label+(f.required?" *":"")));
+          const input=document.createElement("input");
+          input.type=f.secret?"password":"text";
+          input.placeholder=f.placeholder||"";
+          input.dataset.field=f.name;
+          input.value=f.has_value?(f.secret?"":f.value):"";
+          if(f.secret&&f.has_value)input.placeholder="saved — leave empty to keep";
+          wrap.appendChild(input);
+          if(f.help)wrap.appendChild(el("div","hint",f.help));
+          form.appendChild(wrap);
+        });
+        const save=el("button","btn","Save & start");
+        save.style.alignSelf="flex-end";
+        save.onclick=async()=>{
+          const values={};form.querySelectorAll("input[data-field]").forEach(inp=>{
+            if(inp.value)values[inp.dataset.field]=inp.value;
+          });
+          save.disabled=true;save.textContent="Saving…";
+          try{await api(`/admin/sources/${s.id}/config`,{values});loadSources();}
+          catch(e){save.disabled=false;save.textContent="Save & start";alert("Save failed.");}
+        };
+        form.appendChild(save);
+        row.appendChild(form);
+      }
+      c.appendChild(row);
     });
   }catch(e){}
 }
@@ -350,17 +405,17 @@ async function loadCalendar(){
   const c=$("#calendar");
   try{
     const {events}=await api("/api/calendar/upcoming");c.innerHTML="";
-    if(!events||!events.length){c.appendChild(el("div","empty","No upcoming events (set ECON_CALENDAR_URL to populate)."));return;}
-    events.slice(0,12).forEach(ev=>{
+    if(!events||!events.length){c.appendChild(el("div","empty","No upcoming events."));return;}
+    events.slice(0,20).forEach(ev=>{
       const row=el("div","src"),when=new Date(ev.when).toLocaleString();
       row.appendChild(el("span","num","★".repeat(ev.volatility)));
       row.appendChild(el("div","grow",
         `<div><b>${ev.title}</b> <span class="muted num">${ev.currency||""}</span></div>
          <div class="muted" style="font-size:12px">${when} · fc ${ev.forecast||"—"} · prev ${ev.previous||"—"}</div>`));
-      const b=el("button","btn"+(ev.armed?" on":""),ev.armed?"Armed":"Arm");
-      b.onclick=async()=>{try{const r=await api("/admin/calendar/arm",{event_id:ev.id,armed:!ev.armed});
-        ev.armed=r.armed;b.textContent=ev.armed?"Armed":"Arm";b.classList.toggle("on",ev.armed);}catch(e){}};
-      row.appendChild(b);c.appendChild(row);
+      if(ev.armed)row.appendChild(el("span","chip",
+        `<span style="color:var(--green)">●</span>&nbsp;watching`));
+      else row.appendChild(el("span","chip","scheduled"));
+      c.appendChild(row);
     });
   }catch(e){c.innerHTML="";c.appendChild(el("div","empty","Calendar unavailable."));}
 }

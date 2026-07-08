@@ -39,6 +39,11 @@ class Store(Protocol):
     async def get_strategy_id(self) -> str | None: ...
     async def set_strategy_id(self, strategy_id: str) -> None: ...
 
+    # Per-source runtime config (dashboard-editable overrides on top of env).
+    async def get_source_config(self, source_id: str) -> dict[str, str]: ...
+    async def set_source_config(self, source_id: str, config: dict[str, str]) -> None: ...
+    async def all_source_configs(self) -> dict[str, dict[str, str]]: ...
+
     # Risk counters / cooldowns / positions
     async def trades_last_hour(self) -> int: ...
     async def record_trade(self, asset: str, cooldown_s: int) -> None: ...
@@ -81,6 +86,7 @@ class InMemoryStore:
         self._history: list[dict] = []  # recent pipeline results (bounded)
         self._critiques: list[dict] = []  # SL post-mortems (bounded)
         self._strategy_id: str | None = None
+        self._source_configs: dict[str, dict[str, str]] = {}
 
     async def connect(self) -> None:
         log.info("store_backend", backend="in-memory")
@@ -100,6 +106,15 @@ class InMemoryStore:
 
     async def set_strategy_id(self, strategy_id: str) -> None:
         self._strategy_id = strategy_id
+
+    async def get_source_config(self, source_id: str) -> dict[str, str]:
+        return dict(self._source_configs.get(source_id, {}))
+
+    async def set_source_config(self, source_id: str, config: dict[str, str]) -> None:
+        self._source_configs[source_id] = {k: str(v) for k, v in config.items() if v}
+
+    async def all_source_configs(self) -> dict[str, dict[str, str]]:
+        return {k: dict(v) for k, v in self._source_configs.items()}
 
     def _trim_trades(self, now: float) -> None:
         cutoff = now - _HOUR_S
@@ -212,6 +227,26 @@ class RedisStore:
 
     async def set_strategy_id(self, strategy_id: str) -> None:
         await self._r.set(self.STRATEGY_KEY, strategy_id)
+
+    async def get_source_config(self, source_id: str) -> dict[str, str]:
+        raw = await self._r.get(f"fst:source_config:{source_id}")
+        return orjson.loads(raw) if raw else {}
+
+    async def set_source_config(self, source_id: str, config: dict[str, str]) -> None:
+        cleaned = {k: str(v) for k, v in config.items() if v}
+        if cleaned:
+            await self._r.set(f"fst:source_config:{source_id}", orjson.dumps(cleaned).decode())
+        else:
+            await self._r.delete(f"fst:source_config:{source_id}")
+
+    async def all_source_configs(self) -> dict[str, dict[str, str]]:
+        result: dict[str, dict[str, str]] = {}
+        async for key in self._r.scan_iter("fst:source_config:*"):
+            source_id = key.split(":", 2)[2]
+            raw = await self._r.get(key)
+            if raw:
+                result[source_id] = orjson.loads(raw)
+        return result
 
     async def trades_last_hour(self) -> int:
         now = time.time()

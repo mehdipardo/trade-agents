@@ -19,6 +19,18 @@ Cost = Literal["free", "freemium", "paid"]
 
 
 @dataclass(frozen=True)
+class ConfigField:
+    """Metadata for a user-editable source-config field (rendered as an input)."""
+
+    name: str  # setting key, e.g. "truth_social_url" (matches Settings attr name)
+    label: str  # human-readable label shown next to the input
+    placeholder: str = ""
+    secret: bool = False  # renders as <input type="password"> and is masked on GET
+    required: bool = True
+    help: str = ""
+
+
+@dataclass(frozen=True)
 class SourceSpec:
     """Metadata describing a catalog source (what the UI renders)."""
 
@@ -33,6 +45,9 @@ class SourceSpec:
     # Free-form notes surfaced in the UI (caveats, config hints).
     notes: str = ""
     tags: tuple[str, ...] = field(default_factory=tuple)
+    # Config fields the operator can fill from the dashboard. Empty tuple means
+    # the source works out-of-the-box (no setup required).
+    config_fields: tuple[ConfigField, ...] = field(default_factory=tuple)
 
 
 # The curated catalog. Ordered by recommended prominence for the demo.
@@ -79,16 +94,14 @@ CATALOG: tuple[SourceSpec, ...] = (
         "fastest but ToS-gray and can break; a mirror archive (~5 min) is the "
         "robust fallback.",
         tags=("social", "high-impact"),
-    ),
-    SourceSpec(
-        id="sec_press",
-        name="SEC — press & litigation (RSS)",
-        kind="regulatory",
-        description="Official SEC press releases and litigation feeds.",
-        cost="free",
-        reactivity="minutes (poll)",
-        default_enabled=False,
-        tags=("regulation",),
+        config_fields=(
+            ConfigField(
+                name="truth_social_url",
+                label="Statuses feed URL",
+                placeholder="https://truthsocial.com/api/v1/accounts/<id>/statuses",
+                help="Public statuses endpoint or a mirror. Paste the URL and hit Save.",
+            ),
+        ),
     ),
     SourceSpec(
         id="congress_bills",
@@ -100,6 +113,20 @@ CATALOG: tuple[SourceSpec, ...] = (
         default_enabled=False,
         notes="Free official API; track specific bill numbers.",
         tags=("regulation", "legislation"),
+        config_fields=(
+            ConfigField(
+                name="congress_api_key",
+                label="Congress.gov API key",
+                placeholder="paste your free api.congress.gov key",
+                secret=True,
+            ),
+            ConfigField(
+                name="congress_tracked_bills",
+                label="Tracked bills",
+                placeholder="119/hr/1747,119/s/1582",
+                help="Comma-separated bill refs, e.g. 119/hr/1747 (CLARITY).",
+            ),
+        ),
     ),
     SourceSpec(
         id="crypto_news_rss",
@@ -110,6 +137,14 @@ CATALOG: tuple[SourceSpec, ...] = (
         reactivity="minutes (poll)",
         default_enabled=False,
         tags=("baseline",),
+        config_fields=(
+            ConfigField(
+                name="rss_feeds",
+                label="RSS feed URLs",
+                placeholder="https://www.coindesk.com/arc/outboundfeeds/rss,https://feeds.bloomberg.com/markets/news.rss",
+                help="Comma-separated. Public RSS endpoints only.",
+            ),
+        ),
     ),
 )
 
@@ -152,10 +187,45 @@ def reset_state() -> None:
     _enabled = {s.id for s in CATALOG if s.default_enabled}
 
 
-def as_dict() -> list[dict]:
-    """Serialize the catalog + enabled state for the API/UI."""
-    return [
-        {
+def _mask(value: str) -> str:
+    """Never echo a secret back verbatim; keep the last 4 chars for recognition."""
+    if not value:
+        return ""
+    tail = value[-4:] if len(value) > 4 else ""
+    return f"••••{tail}"
+
+
+def as_dict(
+    *,
+    current_values: dict[str, dict[str, str]] | None = None,
+    running_ids: set[str] | None = None,
+) -> list[dict]:
+    """Serialize the catalog for the API/UI.
+
+    Args:
+        current_values: {source_id: {field_name: current_value}} — used to
+            pre-fill inputs on the dashboard. Secrets are masked.
+        running_ids: source ids the manager has an active background task for.
+    """
+    current_values = current_values or {}
+    running_ids = running_ids or set()
+    out: list[dict] = []
+    for s in CATALOG:
+        vals = current_values.get(s.id, {})
+        fields: list[dict] = []
+        for f in s.config_fields:
+            raw = vals.get(f.name, "")
+            fields.append({
+                "name": f.name,
+                "label": f.label,
+                "placeholder": f.placeholder,
+                "secret": f.secret,
+                "required": f.required,
+                "help": f.help,
+                "value": _mask(raw) if f.secret else raw,
+                "has_value": bool(raw),
+            })
+        out.append({
             "id": s.id,
             "name": s.name,
             "kind": s.kind,
@@ -165,6 +235,8 @@ def as_dict() -> list[dict]:
             "notes": s.notes,
             "tags": list(s.tags),
             "enabled": is_enabled(s.id),
-        }
-        for s in CATALOG
-    ]
+            "running": s.id in running_ids,
+            "config_fields": fields,
+            "needs_config": bool(s.config_fields) and any(not fld["has_value"] for fld in fields),
+        })
+    return out

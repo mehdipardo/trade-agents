@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.services.exchange import get_exchange, init_exchange
     from app.services.position_monitor import position_monitor_loop
     from app.services.store import get_store, init_store
+    from app.sources.manager import get_manager
     from app.worker import create_queue, worker_loop
 
     settings = _load_settings()
@@ -64,86 +65,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_store(settings.redis_url)
     await init_exchange(settings)
 
-    # Ingestion queue + worker + SL/TP position monitor + optional RSS poller.
+    # Ingestion queue + worker + SL/TP position monitor. Sources are owned by
+    # the manager, which reads config from Store first, env second, and can be
+    # hot-restarted at runtime from the dashboard.
     app.state.queue = create_queue()
-    tasks = [
+    core_tasks = [
         asyncio.create_task(worker_loop(app.state.queue), name="ingestion-worker"),
         asyncio.create_task(position_monitor_loop(), name="position-monitor"),
     ]
-
-    from app.ingestion.rss_poller import parse_feeds_setting, rss_poller_loop
-
-    feeds = parse_feeds_setting(settings.rss_feeds)
-    if feeds:
-        tasks.append(
-            asyncio.create_task(
-                rss_poller_loop(app.state.queue, feeds, settings.rss_poll_interval_s),
-                name="rss-poller",
-            )
-        )
-
-    # Broad news aggregator firehose (opt-in: only when an SSE URL is set).
-    if settings.aggregator_sse_url:
-        from app.sources.aggregator import stream_loop as aggregator_stream
-
-        tasks.append(
-            asyncio.create_task(
-                aggregator_stream(app.state.queue, settings.aggregator_sse_url),
-                name="aggregator-stream",
-            )
-        )
-
-    # Economic-calendar release watcher (opt-in: only when a feed URL is set).
-    if settings.econ_calendar_url:
-        from app.sources.watcher import watcher_loop
-
-        tasks.append(
-            asyncio.create_task(
-                watcher_loop(app.state.queue, settings.econ_calendar_url),
-                name="econ-watcher",
-            )
-        )
-
-    # Trump / Truth Social poller (opt-in: only when a feed URL is set).
-    if settings.truth_social_url:
-        from app.sources.truth_social import poll_loop as truth_poll_loop
-
-        tasks.append(
-            asyncio.create_task(
-                truth_poll_loop(
-                    app.state.queue,
-                    settings.truth_social_url,
-                    settings.truth_social_poll_interval_s,
-                ),
-                name="truth-poller",
-            )
-        )
-
-    # Congress.gov bill tracker (opt-in: needs API key + tracked bills).
-    if settings.congress_api_key and settings.congress_tracked_bills:
-        from app.sources.congress import poll_loop as congress_poll_loop
-
-        tasks.append(
-            asyncio.create_task(
-                congress_poll_loop(
-                    app.state.queue,
-                    settings.congress_tracked_bills,
-                    settings.congress_api_key,
-                    settings.congress_poll_interval_s,
-                ),
-                name="congress-poller",
-            )
-        )
+    manager = get_manager()
+    await manager.start_all(app.state.queue)
 
     try:
         yield
     finally:
-        for task in tasks:
+        for task in core_tasks:
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
+        await manager.stop_all()
         exchange = get_exchange()
         if exchange is not None:
             await exchange.close()

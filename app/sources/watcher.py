@@ -12,17 +12,20 @@ calendar URL is configured).
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import UTC, datetime, timedelta
 
 from app.ingestion.normalizer import normalize_payload
 from app.logging_config import get_logger
 from app.models.schemas import NewsEvent
-from app.sources.economic_calendar import CalendarEvent, fetch_calendar
+from app.sources.economic_calendar import CalendarEvent, cache_events, fetch_calendar
 
 log = get_logger("app.sources.watcher")
 
 LEAD_S = 30  # start watching this long before the scheduled time
 TRAIL_S = 600  # keep watching this long after (in case of delay)
+REFRESH_S = 900  # re-fetch and re-arm every 15 minutes
+AUTO_ARM_MIN_VOL = 3  # arm every event with Medium+ volatility (3 = Medium, 5 = High)
 
 # Process-local armed state: event_id -> CalendarEvent, plus already-emitted ids.
 _armed: dict[str, CalendarEvent] = {}
@@ -106,13 +109,58 @@ async def _poll_once(queue: asyncio.Queue[NewsEvent], calendar_url: str) -> None
             disarm(armed_event.id)
 
 
+async def _refresh_and_auto_arm(calendar_url: str) -> None:
+    """Fetch the calendar and arm every future event with volatility >= threshold.
+
+    Past events are dropped from ``_armed`` so it stays bounded. Any already-armed
+    events are refreshed with the newer version (in case the schedule shifted).
+    """
+    fresh = await fetch_calendar(calendar_url)
+    if not fresh:
+        return
+    cache_events(fresh)
+    now = datetime.now(UTC)
+    # Drop past-window armed events (idempotent cleanup).
+    for eid in list(_armed):
+        ev = _armed[eid]
+        if ev.when + timedelta(seconds=TRAIL_S) < now:
+            _armed.pop(eid, None)
+    armed_count = 0
+    for ev in fresh:
+        if ev.volatility < AUTO_ARM_MIN_VOL:
+            continue
+        if ev.when + timedelta(seconds=TRAIL_S) < now:
+            continue
+        arm(ev)
+        armed_count += 1
+    log.info("econ_calendar_refreshed", total=len(fresh), armed=armed_count)
+
+
 async def watcher_loop(
     queue: asyncio.Queue[NewsEvent], calendar_url: str, poll_interval_s: float = 2.0
 ) -> None:
-    """Poll armed events near their release time and emit the print."""
-    log.info("econ_watcher_started", poll_interval_s=poll_interval_s)
+    """Auto-arm every high-impact event and fire the print at release.
+
+    A refresh runs on startup and every ``REFRESH_S`` (15 min) to pick up
+    freshly-published or shifted events; the release poll runs every
+    ``poll_interval_s`` (2 s) to capture the actual within a second of publish.
+    """
+    log.info(
+        "econ_watcher_started",
+        poll_interval_s=poll_interval_s,
+        refresh_s=REFRESH_S,
+        auto_arm_min_volatility=AUTO_ARM_MIN_VOL,
+    )
+    last_refresh: float = 0.0
     try:
         while True:
+            now_mono = time.monotonic()
+            if now_mono - last_refresh >= REFRESH_S:
+                try:
+                    await _refresh_and_auto_arm(calendar_url)
+                    last_refresh = now_mono
+                except Exception as exc:  # noqa: BLE001 - never kill the watcher
+                    log.error("econ_refresh_error", error=str(exc))
             try:
                 await _poll_once(queue, calendar_url)
             except Exception as exc:  # noqa: BLE001 - never kill the watcher
