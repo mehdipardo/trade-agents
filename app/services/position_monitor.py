@@ -1,17 +1,25 @@
 """Position monitor.
 
-An asyncio task that polls the price of every open position and exits at market
-when the stop-loss or take-profit is touched (no native OCO in the MVP). The
-decision logic (``exit_reason``, ``realized_pnl``) is pure and unit-tested.
+Polls the price of every open position and manages the two-phase exit:
 
-In offline mode (no exchange) prices come from a static mock so nothing
-triggers; the loop still runs and is a no-op, which keeps the demo self-contained.
+- Phase "main": watch SL and TP. On TP hit, close the main portion (typically
+  80%) and transition the remainder to "runner" phase with SL moved to entry
+  (breakeven). On SL hit, close the whole position.
+- Phase "runner": watch the runner's SL (entry price) and the runner TP
+  (typically +50%). Whichever fires first closes the runner.
+
+When an SL hits (main or runner), fire an LLM post-mortem so the operator can
+read a critique of what went wrong.
+
+Decision helpers are pure and unit-tested. In offline mode prices come from a
+static mock so nothing triggers; the loop still runs (no-op) which keeps the
+demo self-contained.
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Literal
+from typing import Any, Literal
 
 from app.logging_config import get_logger
 from app.services.exchange import get_exchange
@@ -19,12 +27,12 @@ from app.services.store import get_store
 
 log = get_logger("app.services.position_monitor")
 
-ExitReason = Literal["stop_loss", "take_profit"]
+ExitReason = Literal["stop_loss", "take_profit", "runner_stop", "runner_take_profit"]
 
 
 def exit_reason(
     side: str, entry_price: float, current_price: float, sl_pct: float, tp_pct: float
-) -> ExitReason | None:
+) -> Literal["stop_loss", "take_profit"] | None:
     """Return the exit reason if SL/TP is touched for a long/short, else None."""
     if side == "buy":  # long
         if current_price <= entry_price * (1 - sl_pct / 100):
@@ -55,6 +63,23 @@ def realized_pnl(side: str, entry_price: float, exit_price: float, amount: float
     return (entry_price - exit_price) * amount
 
 
+def runner_exit_reason(
+    side: str, entry_price: float, current_price: float, runner_tp_pct: float
+) -> Literal["runner_stop", "runner_take_profit"] | None:
+    """Runner exit: SL is at breakeven (entry), TP is runner_tp_pct."""
+    if side == "buy":
+        if current_price <= entry_price:
+            return "runner_stop"
+        if current_price >= entry_price * (1 + runner_tp_pct / 100):
+            return "runner_take_profit"
+    else:
+        if current_price >= entry_price:
+            return "runner_stop"
+        if current_price <= entry_price * (1 - runner_tp_pct / 100):
+            return "runner_take_profit"
+    return None
+
+
 async def _current_price(symbol: str) -> float | None:
     ex = get_exchange()
     if ex is not None:
@@ -69,49 +94,174 @@ async def _current_price(symbol: str) -> float | None:
     return _MOCK_PRICES.get(symbol)
 
 
-async def _check_position(position: dict) -> None:
-    symbol = position["asset"]
+async def _close_market(symbol: str, close_side: str, amount: float, tag: str) -> bool:
+    """Send a reduce-only close (live), or do nothing (offline). Returns True on success."""
+    ex = get_exchange()
+    if ex is None:
+        return True
+    from app.graph.nodes.executor import client_order_id
+
+    try:
+        await ex.create_market_order(
+            symbol, close_side, amount, client_order_id(tag), reduce_only=True
+        )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log.error("position_close_failed", symbol=symbol, error=str(exc), tag=tag)
+        return False
+
+
+async def _finalize_close(
+    symbol: str,
+    reason: ExitReason,
+    position: dict,
+    exit_price: float,
+    amount_closed: float,
+    is_full_close: bool,
+) -> None:
+    """Book PnL, update the store, and fire the LLM critique on any SL hit."""
+    store = get_store()
     side = position["side"]
     entry = float(position["entry_price"])
-    amount = float(position["amount"])
-    sl = float(position["stop_loss_pct"])
-    tp = float(position["take_profit_pct"])
-
-    price = await _current_price(symbol)
-    if price is None:
-        return
-
-    reason = exit_reason(side, entry, price, sl, tp)
-    if reason is None:
-        return
-
-    store = get_store()
-    ex = get_exchange()
-    close_side = "sell" if side == "buy" else "buy"
-    if ex is not None:
-        from app.graph.nodes.executor import client_order_id
-
-        try:
-            await ex.create_market_order(
-                symbol, close_side, amount, client_order_id(f"close-{symbol}-{entry}"),
-                reduce_only=True,
-            )
-        except Exception as exc:  # noqa: BLE001
-            log.error("position_close_failed", symbol=symbol, error=str(exc))
-            return
-
-    pnl = realized_pnl(side, entry, price, amount)
-    await store.set_position(symbol, is_open=False)
+    pnl = realized_pnl(side, entry, exit_price, amount_closed)
     await store.add_daily_pnl(pnl)
+
+    if is_full_close:
+        await store.set_position(symbol, is_open=False)
     log.info(
-        "position_closed",
+        "position_leg_closed",
         symbol=symbol,
         reason=reason,
         side=side,
         entry_price=entry,
-        exit_price=price,
+        exit_price=exit_price,
+        amount=amount_closed,
         pnl_quote=round(pnl, 4),
+        full_close=is_full_close,
     )
+    # Async LLM post-mortem on any SL hit (never blocks the monitor).
+    if reason in ("stop_loss", "runner_stop"):
+        asyncio.create_task(_run_critique(symbol, reason, position, exit_price, pnl))
+
+
+async def _run_critique(
+    symbol: str, reason: ExitReason, position: dict, exit_price: float, pnl: float
+) -> None:
+    """Ask the LLM why this stop hit; store the report. Never raises."""
+    try:
+        from app.services.critique import generate_and_store_critique
+
+        await generate_and_store_critique(symbol, reason, position, exit_price, pnl)
+    except Exception as exc:  # noqa: BLE001 - critiques are best-effort
+        log.warning("critique_failed", symbol=symbol, error=str(exc))
+
+
+async def _handle_main_phase(position: dict, price: float) -> None:
+    side = position["side"]
+    entry = float(position["entry_price"])
+    main_amount = float(position.get("main_amount") or position["amount"])
+    runner_amount = float(position.get("runner_amount") or 0.0)
+    sl_pct = float(position["stop_loss_pct"])
+    tp_pct = float(position["take_profit_pct"])
+
+    reason = exit_reason(side, entry, price, sl_pct, tp_pct)
+    if reason is None:
+        return
+
+    symbol = position["asset"]
+    close_side = "sell" if side == "buy" else "buy"
+
+    if reason == "stop_loss":
+        total = main_amount + runner_amount
+        if not await _close_market(symbol, close_side, total, f"sl-{symbol}-{entry}"):
+            return
+        await _finalize_close(symbol, "stop_loss", position, price, total, is_full_close=True)
+        return
+
+    # TP hit — close the main leg. If there's no runner leg, close everything.
+    if runner_amount <= 0:
+        if not await _close_market(symbol, close_side, main_amount, f"tp-{symbol}-{entry}"):
+            return
+        await _finalize_close(
+            symbol, "take_profit", position, price, main_amount, is_full_close=True
+        )
+        return
+
+    if not await _close_market(symbol, close_side, main_amount, f"tp1-{symbol}-{entry}"):
+        return
+    await _finalize_close(
+        symbol, "take_profit", position, price, main_amount, is_full_close=False
+    )
+
+    # Transition the remaining position to runner phase: SL moves to entry
+    # (breakeven), only the runner amount remains.
+    updated = {
+        **position,
+        "amount": runner_amount,
+        "main_amount": 0.0,
+        "runner_amount": runner_amount,
+        "phase": "runner",
+        "stop_loss_price": entry,
+        "tp1_price": price,
+    }
+    await get_store().set_position(symbol, is_open=True, detail=updated)
+    log.info(
+        "runner_armed",
+        symbol=symbol,
+        entry_price=entry,
+        runner_tp_price=position.get("runner_tp_price"),
+        amount=runner_amount,
+    )
+
+
+async def _handle_runner_phase(position: dict, price: float) -> None:
+    side = position["side"]
+    entry = float(position["entry_price"])
+    runner_tp_pct = float(position.get("runner_tp_pct") or 0.0)
+    amount = float(position.get("runner_amount") or position["amount"])
+
+    reason = runner_exit_reason(side, entry, price, runner_tp_pct)
+    if reason is None:
+        return
+
+    symbol = position["asset"]
+    close_side = "sell" if side == "buy" else "buy"
+    if not await _close_market(symbol, close_side, amount, f"runner-{symbol}-{entry}"):
+        return
+    await _finalize_close(symbol, reason, position, price, amount, is_full_close=True)
+
+
+async def _check_position(position: dict) -> None:
+    symbol = position["asset"]
+    price = await _current_price(symbol)
+    if price is None:
+        return
+    if position.get("phase") == "runner":
+        await _handle_runner_phase(position, price)
+    else:
+        await _handle_main_phase(position, price)
+
+
+async def close_position_manually(symbol: str) -> dict[str, Any] | None:
+    """Force-close a position at market. Returns the exit report or None."""
+    store = get_store()
+    positions = {p["asset"]: p for p in await store.open_positions()}
+    position = positions.get(symbol)
+    if position is None:
+        return None
+    price = await _current_price(symbol)
+    if price is None:
+        return None
+    amount = float(position.get("amount") or 0)
+    close_side = "sell" if position["side"] == "buy" else "buy"
+    if not await _close_market(symbol, close_side, amount, f"manual-{symbol}"):
+        return None
+    entry = float(position["entry_price"])
+    pnl = realized_pnl(position["side"], entry, price, amount)
+    await store.add_daily_pnl(pnl)
+    await store.set_position(symbol, is_open=False)
+    log.info("position_closed_manually", symbol=symbol, exit_price=price, pnl_quote=round(pnl, 4))
+    return {"symbol": symbol, "exit_price": price, "pnl_quote": round(pnl, 4)}
 
 
 async def position_monitor_loop(poll_interval_s: float = 2.0) -> None:

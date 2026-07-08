@@ -64,20 +64,40 @@ def _position_detail(
     amount: float,
     stop_loss_pct: float,
     take_profit_pct: float,
+    runner_pct: float,
+    runner_tp_pct: float,
+    leverage: int,
+    impact_score: int,
+    original_signal: dict | None,
 ) -> dict:
     from app.services.position_monitor import sl_tp_prices
 
     sl_price, tp_price = sl_tp_prices(side, entry_price, stop_loss_pct, take_profit_pct)
+    runner_amount = round(amount * runner_pct, 8) if runner_pct > 0 else 0.0
+    main_amount = round(amount - runner_amount, 8)
+    runner_tp_price = None
+    if runner_pct > 0 and runner_tp_pct > 0:
+        _, runner_tp_price = sl_tp_prices(side, entry_price, stop_loss_pct, runner_tp_pct)
+        runner_tp_price = round(runner_tp_price, 8)
     return {
         "symbol": symbol,
         "side": side,  # buy = long, sell = short
         "entry_price": entry_price,
         "amount": amount,
+        "main_amount": main_amount,
+        "runner_amount": runner_amount,
         "stop_loss_pct": stop_loss_pct,
         "take_profit_pct": take_profit_pct,
+        "runner_pct": runner_pct,
+        "runner_tp_pct": runner_tp_pct,
+        "leverage": leverage,
+        "impact_score": impact_score,
         "stop_loss_price": round(sl_price, 8),
         "take_profit_price": round(tp_price, 8),
+        "runner_tp_price": runner_tp_price,
+        "phase": "main",  # "main" -> "runner" once TP1 hits
         "opened_at": datetime.now(UTC).isoformat(),
+        "original_signal": original_signal or {},
     }
 
 
@@ -88,7 +108,12 @@ async def _record(
     amount: float,
     stop_loss_pct: float,
     take_profit_pct: float,
+    runner_pct: float,
+    runner_tp_pct: float,
+    leverage: int,
+    impact_score: int,
     cooldown_s: int,
+    original_signal: dict | None,
 ) -> None:
     store = get_store()
     await store.record_trade(symbol, cooldown_s=cooldown_s)
@@ -96,7 +121,8 @@ async def _record(
         symbol,
         is_open=True,
         detail=_position_detail(
-            symbol, side, entry_price, amount, stop_loss_pct, take_profit_pct
+            symbol, side, entry_price, amount, stop_loss_pct, take_profit_pct,
+            runner_pct, runner_tp_pct, leverage, impact_score, original_signal,
         ),
     )
 
@@ -124,7 +150,12 @@ async def _offline_fill(state: TradingState) -> dict[str, Any]:
         symbol, side, price, amount,
         risk.stop_loss_pct,  # type: ignore[union-attr]
         risk.take_profit_pct,  # type: ignore[union-attr]
+        risk.runner_pct or 0.0,  # type: ignore[union-attr]
+        risk.runner_tp_pct or 0.0,  # type: ignore[union-attr]
+        risk.leverage or 1,  # type: ignore[union-attr]
+        signal.impact_score,  # type: ignore[union-attr]
         settings.cooldown_s,
+        signal.model_dump(),  # type: ignore[union-attr]
     )
     log.info("paper_fill", event_id=event.id, symbol=symbol, side=side, amount=amount)
     await emit("order", event_id=event.id, payload=order.model_dump())
@@ -173,7 +204,12 @@ async def _live_fill(state: TradingState, ex: ExchangeClient) -> dict[str, Any]:
         symbol, side, float(avg_price or price), float(filled),
         risk.stop_loss_pct,  # type: ignore[union-attr]
         risk.take_profit_pct,  # type: ignore[union-attr]
+        risk.runner_pct or 0.0,  # type: ignore[union-attr]
+        risk.runner_tp_pct or 0.0,  # type: ignore[union-attr]
+        risk.leverage or 1,  # type: ignore[union-attr]
+        signal.impact_score,  # type: ignore[union-attr]
         settings.cooldown_s,
+        signal.model_dump(),  # type: ignore[union-attr]
     )
     log.info("live_fill", event_id=event.id, symbol=symbol, side=side, amount=order.amount)
     await emit("order", event_id=event.id, payload=order.model_dump())

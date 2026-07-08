@@ -64,3 +64,9 @@ async def strategies() -> dict[str, object]:
     store = get_store()
     active_id = await store.get_strategy_id() or DEFAULT_STRATEGY_ID
     return {"strategies": list_strategies(), "active": active_id}
+
+
+@router.get("/critiques")
+async def critiques(limit: int = 20) -> dict[str, list[dict]]:
+    """LLM post-mortems of the most recent stop-loss hits."""
+    return {"critiques": await get_store().critiques(limit)}

@@ -71,6 +71,15 @@
   .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
   .long{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
   .short{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
+  .runner{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+  .lev{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+  .imp{background:color-mix(in srgb,var(--muted) 16%,transparent);color:var(--muted);
+    font-family:var(--mono)}
+  .critique{padding:10px 0;border-top:1px solid var(--line);font-size:13px}
+  .critique:first-child{border-top:0}
+  .critique .cmeta{color:var(--muted);font-size:11px;margin-bottom:4px}
+  .critique .cbody{color:var(--ink);line-height:1.45}
+  .btn.mini{padding:4px 8px;font-size:11px}
   .bull{color:var(--green)} .bear{color:var(--red)} .neutral{color:var(--gray)}
   .feed{max-height:300px;overflow:auto}
   .muted{color:var(--muted)}
@@ -151,6 +160,10 @@
       <div class="card pad"><h3>Risk state</h3><div id="risk"></div></div>
       <div class="card pad"><h3>Signals</h3><div class="feed" id="signals"></div></div>
       <div class="card pad"><h3>Orders</h3><div class="feed" id="orders"></div></div>
+      <div class="card pad" style="grid-column:1 / -1">
+        <h3>Stop-loss post-mortems <span class="muted" style="font-weight:400;font-size:12px">— LLM critique of each SL hit</span></h3>
+        <div class="feed" id="critiques"></div>
+      </div>
     </div>
   </section>
 
@@ -220,11 +233,16 @@ async function loadStrategies(){
     const {strategies,active}=await api("/api/strategies"),wrap=$("#strategies");wrap.innerHTML="";
     strategies.forEach(s=>{
       const card=el("div","strat-card"+(s.id===active?" active":""));
+      const runnerLine=s.runner_pct>0
+        ? `Runner <b>${(s.runner_pct*100).toFixed(0)}%</b> to <b>+${s.runner_tp_pct}%</b><br>`:"";
+      const levLine=s.leverage_multiplier>1
+        ? `Boost <b>x${s.leverage_multiplier}</b> @ impact≥<b>${s.high_impact_threshold}</b><br>`:"";
       card.innerHTML=
         `<div class="snm">${s.name}</div>
          <div class="sdesc">${s.description}</div>
          <div class="sparams">
            SL <b>${s.stop_loss_pct}%</b> · TP <b>${s.take_profit_pct}%</b><br>
+           ${runnerLine}${levLine}
            Size <b>≤${s.max_notional_abs}$</b> · Conf <b>≥${(s.confidence_threshold*100).toFixed(0)}%</b><br>
            Intensity <b>≥${s.min_intensity}</b> · Trades/h <b>${s.max_trades_per_hour}</b>
          </div>`;
@@ -246,14 +264,39 @@ function renderPositions(list){
   const c=$("#positions");c.innerHTML="";
   if(!list||!list.length){c.appendChild(el("div","empty","No open positions."));return;}
   list.forEach(p=>{
-    const long=p.side==="buy",row=el("div","row");
+    const long=p.side==="buy",row=el("div","row"),isRunner=p.phase==="runner";
     row.appendChild(el("span",`pill ${long?"long":"short"}`,long?"LONG ▲":"SHORT ▼"));
     row.appendChild(el("span","num",p.asset));
-    row.appendChild(el("span","grow muted num",
-      ` @${(+p.entry_price).toLocaleString()}  SL ${(+p.stop_loss_price).toFixed(0)} · TP ${(+p.take_profit_price).toFixed(0)}`));
+    if(isRunner)row.appendChild(el("span","pill runner","RUNNER"));
+    if(p.leverage&&p.leverage>1)row.appendChild(el("span","pill lev",`x${p.leverage}`));
+    if(p.impact_score)row.appendChild(el("span","pill imp",`i${p.impact_score}`));
+    const tpTxt=isRunner
+      ? `SL @entry · TP ${p.runner_tp_price?(+p.runner_tp_price).toFixed(2):"—"}`
+      : `SL ${(+p.stop_loss_price).toFixed(2)} · TP ${(+p.take_profit_price).toFixed(2)}`;
+    row.appendChild(el("span","grow muted num",` @${(+p.entry_price).toLocaleString()}  ${tpTxt}`));
+    const btn=el("button","btn mini","Close");
+    btn.onclick=async()=>{if(!confirm(`Close ${p.asset} at market?`))return;
+      try{await api("/admin/positions/close",{symbol:p.asset});refreshState();}catch(e){}};
+    row.appendChild(btn);
     c.appendChild(row);
   });
 }
+
+function renderCritiques(list){
+  const c=$("#critiques");c.innerHTML="";
+  if(!list||!list.length){c.appendChild(el("div","empty",
+    "No stop-losses hit yet. Each SL will produce an LLM critique here."));return;}
+  list.forEach(cr=>{
+    const el2=el("div","critique"),when=new Date(cr.ts).toLocaleString();
+    const meta=`${when} · ${cr.symbol} · ${cr.reason} · PnL ${cr.pnl_quote>=0?"+":""}${cr.pnl_quote.toFixed(2)}`+
+      (cr.leverage&&cr.leverage>1?` · x${cr.leverage}`:"")+
+      (cr.impact_score?` · impact ${cr.impact_score}/10`:"");
+    el2.appendChild(el("div","cmeta",meta));
+    el2.appendChild(el("div","cbody",cr.critique||""));
+    c.appendChild(el2);
+  });
+}
+async function loadCritiques(){try{const {critiques}=await api("/api/critiques");renderCritiques(critiques);}catch(e){}}
 function renderRisk(state){
   const c=$("#risk");c.innerHTML="";
   const pct=Math.min(100,(state.trades_last_hour/6)*100);
@@ -371,7 +414,7 @@ async function hydrate(){
     $("#mode-chip").textContent=`${h.exchange_id} · ${h.llm_provider}`;}catch(e){$("#health-dot").className="dot off";}
   try{const s=await api("/api/signals");s.signals.slice(0,20).reverse().forEach(x=>prepend("#signals",signalRow(x)));}catch(e){}
   try{const o=await api("/api/orders");o.orders.slice(0,20).reverse().forEach(x=>prepend("#orders",orderRow(x)));}catch(e){}
-  refreshState();loadSources();loadCalendar();loadStrategies();
+  refreshState();loadSources();loadCalendar();loadStrategies();loadCritiques();
   try{const o=await api("/api/orders");const last=(o.orders||[])[0];
     if(last&&last.symbol)setChartAsset(last.symbol);else setChartAsset("BTC/USDT");
   }catch(e){setChartAsset("BTC/USDT");}
@@ -389,7 +432,7 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   if(tab==="sources"){loadSources();loadCalendar();}
 });
 
-renderPositions([]);connectWs();setInterval(refreshState,4000);
+renderPositions([]);connectWs();setInterval(refreshState,4000);setInterval(loadCritiques,10000);
 </script>
 </body>
 </html>

@@ -32,6 +32,15 @@ class Strategy:
     # Throughput
     max_trades_per_hour: int
     cooldown_s: int
+    # Runner mechanism: close (1 - runner_pct) at TP, keep runner_pct with SL
+    # moved to breakeven, aiming at runner_tp_pct.
+    runner_pct: float = 0.0
+    runner_tp_pct: float = 0.0
+    # High-impact leverage boost: when Signal.impact_score >= threshold, SL and
+    # TP percents are multiplied by leverage_multiplier (position size grows via
+    # notional cap; PnL scales accordingly).
+    high_impact_threshold: int = 8
+    leverage_multiplier: int = 1
 
 
 STRATEGIES: dict[str, Strategy] = {
@@ -52,7 +61,7 @@ STRATEGIES: dict[str, Strategy] = {
     "balanced": Strategy(
         id="balanced",
         name="Balanced",
-        description="Default risk / reward. Reasonable throughput.",
+        description="Default: SL 1.5% / TP 3%. 80% closes at TP, 20% runs to +50% (SL to entry).",
         min_intensity=3,
         min_actionability=2,
         confidence_threshold=0.60,
@@ -62,11 +71,15 @@ STRATEGIES: dict[str, Strategy] = {
         take_profit_pct=3.0,
         max_trades_per_hour=6,
         cooldown_s=900,
+        runner_pct=0.20,
+        runner_tp_pct=50.0,
+        high_impact_threshold=8,
+        leverage_multiplier=3,
     ),
     "aggressive": Strategy(
         id="aggressive",
         name="Aggressive",
-        description="Trades weaker signals. Bigger size, wider SL/TP.",
+        description="Trades weaker signals. Bigger size, wider SL/TP, runner to +80%.",
         min_intensity=3,
         min_actionability=2,
         confidence_threshold=0.55,
@@ -76,6 +89,10 @@ STRATEGIES: dict[str, Strategy] = {
         take_profit_pct=5.0,
         max_trades_per_hour=10,
         cooldown_s=300,
+        runner_pct=0.25,
+        runner_tp_pct=80.0,
+        high_impact_threshold=8,
+        leverage_multiplier=3,
     ),
     "scalp": Strategy(
         id="scalp",

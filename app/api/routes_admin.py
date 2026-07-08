@@ -112,6 +112,27 @@ class StrategyRequest(BaseModel):
     id: str
 
 
+class ClosePositionRequest(BaseModel):
+    """Body for ``POST /admin/positions/close``."""
+
+    symbol: str
+
+
+@router.post("/positions/close")
+async def close_position(body: ClosePositionRequest) -> dict[str, Any]:
+    """Force-close an open position at market (main + runner if present)."""
+    from app.services.position_monitor import close_position_manually
+
+    result = await close_position_manually(body.symbol)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"no open position on {body.symbol}",
+        )
+    log.info("manual_close", **result)
+    return result
+
+
 @router.post("/strategy")
 async def set_strategy(body: StrategyRequest) -> dict[str, Any]:
     """Switch the active strategy (SL/TP, sizing, gates applied from next event)."""

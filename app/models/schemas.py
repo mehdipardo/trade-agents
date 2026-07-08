@@ -51,6 +51,10 @@ class Signal(BaseModel):
     # How cleanly this maps to a directional trade on the mapped asset (ease to
     # long/short): 1 = vague/no clean trade, 5 = obvious directional trade.
     actionability: int = Field(default=3, ge=1, le=5)
+    # Expected price-impact magnitude 1-10 (combines intensity, actionability
+    # and surprise element). Scores >= high_impact_threshold trigger the
+    # strategy's leverage boost.
+    impact_score: int = Field(default=5, ge=1, le=10)
 
 
 class RiskVerdict(BaseModel):
@@ -62,6 +66,11 @@ class RiskVerdict(BaseModel):
     position_size_quote: float | None = None  # notional in USDT
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
+    # Runner mechanism (partial take-profit).
+    runner_pct: float | None = None  # fraction of the position kept as runner (0-1)
+    runner_tp_pct: float | None = None  # runner take-profit target
+    # Leverage applied by the strategy (1 by default, boosted on high impact).
+    leverage: int | None = None
 
 
 class OrderResult(BaseModel):

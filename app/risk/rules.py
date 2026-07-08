@@ -36,6 +36,11 @@ class RiskConfig:
     cooldown_s: int = 900  # 15 min per asset
     max_positions_per_asset: int = 1
     daily_loss_limit_pct: float = 0.03  # -3% equity -> kill switch
+    # Runner + leverage boost (overlaid by the active Strategy).
+    runner_pct: float = 0.0
+    runner_tp_pct: float = 0.0
+    high_impact_threshold: int = 8
+    leverage_multiplier: int = 1
 
     @classmethod
     def from_settings(cls, settings: object, strategy: object | None = None) -> RiskConfig:
@@ -56,6 +61,10 @@ class RiskConfig:
             max_trades_per_hour=source.max_trades_per_hour,  # type: ignore[attr-defined]
             cooldown_s=source.cooldown_s,  # type: ignore[attr-defined]
             daily_loss_limit_pct=settings.daily_loss_limit_pct,  # type: ignore[attr-defined]
+            runner_pct=getattr(source, "runner_pct", 0.0),
+            runner_tp_pct=getattr(source, "runner_tp_pct", 0.0),
+            high_impact_threshold=getattr(source, "high_impact_threshold", 8),
+            leverage_multiplier=getattr(source, "leverage_multiplier", 1),
         )
 
 
@@ -134,11 +143,24 @@ def evaluate(signal: Signal, ctx: RiskContext, config: RiskConfig) -> RiskVerdic
     if size <= 0:
         return _reject("computed position size is zero")
 
+    # --- Leverage boost on high-impact signals ---------------------------
+    # A high impact_score widens SL and TP (and grows notional) by the
+    # multiplier. The dollar risk on SL therefore scales with the multiplier.
+    leverage = 1
+    if signal.impact_score >= config.high_impact_threshold and config.leverage_multiplier > 1:
+        leverage = config.leverage_multiplier
+    sl_pct = config.stop_loss_pct * leverage
+    tp_pct = config.take_profit_pct * leverage
+    size_quote = min(size * leverage, config.max_notional_abs * leverage)
+
     return RiskVerdict(
         approved=True,
         reject_reason=None,
         side=side,  # type: ignore[arg-type]
-        position_size_quote=round(size, 2),
-        stop_loss_pct=config.stop_loss_pct,
-        take_profit_pct=config.take_profit_pct,
+        position_size_quote=round(size_quote, 2),
+        stop_loss_pct=sl_pct,
+        take_profit_pct=tp_pct,
+        runner_pct=config.runner_pct if config.runner_pct > 0 else None,
+        runner_tp_pct=config.runner_tp_pct if config.runner_tp_pct > 0 else None,
+        leverage=leverage,
     )

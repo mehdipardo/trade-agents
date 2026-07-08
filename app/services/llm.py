@@ -128,6 +128,7 @@ def neutral_fallback(reason: str = "analysis failed") -> Signal:
         rationale=reason[:250],
         event_type="other",
         actionability=1,
+        impact_score=1,
     )
 
 
@@ -157,6 +158,7 @@ def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
             rationale="Content appears to be a manipulation attempt; no real market impact.",
             event_type="other",
             actionability=1,
+            impact_score=1,
         )
 
     is_bull = any(k in text for k in _BULL_KEYWORDS)
@@ -170,6 +172,7 @@ def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
             rationale="No clear tradable catalyst detected (offline classifier).",
             event_type="other",
             actionability=1,
+            impact_score=1,
         )
 
     asset: str | None = None
@@ -185,6 +188,8 @@ def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
     sentiment = "BULL" if is_bull else "BEAR"
     # Clean directional trade when we mapped a concrete asset, else weaker.
     actionability = 4 if asset is not None else 1
+    # Offline classifier is deliberately never confident enough to unlock the
+    # leverage boost (that requires nuanced surprise reasoning the LLM does).
     return Signal(
         sentiment=sentiment,
         intensity=4,
@@ -193,6 +198,7 @@ def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
         rationale=f"Offline keyword classification -> {sentiment}.",
         event_type="macro" if is_bear else "social",
         actionability=actionability,
+        impact_score=6 if asset is not None else 3,
     )
 
 

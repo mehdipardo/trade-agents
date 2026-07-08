@@ -60,6 +60,10 @@ class Store(Protocol):
     async def record_history(self, entry: dict) -> None: ...
     async def history(self, limit: int = 100) -> list[dict]: ...
 
+    # LLM post-mortems on stop-loss hits
+    async def record_critique(self, entry: dict) -> None: ...
+    async def critiques(self, limit: int = 20) -> list[dict]: ...
+
     async def snapshot(self) -> dict: ...
 
 
@@ -75,6 +79,7 @@ class InMemoryStore:
         self._pnl: dict[str, float] = {}  # day -> pnl
         self._dedup: dict[str, float] = {}  # key -> expiry epoch
         self._history: list[dict] = []  # recent pipeline results (bounded)
+        self._critiques: list[dict] = []  # SL post-mortems (bounded)
         self._strategy_id: str | None = None
 
     async def connect(self) -> None:
@@ -153,6 +158,13 @@ class InMemoryStore:
 
     async def history(self, limit: int = 100) -> list[dict]:
         return list(reversed(self._history[-limit:]))
+
+    async def record_critique(self, entry: dict) -> None:
+        self._critiques.append(entry)
+        del self._critiques[:-50]
+
+    async def critiques(self, limit: int = 20) -> list[dict]:
+        return list(reversed(self._critiques[-limit:]))
 
     async def snapshot(self) -> dict:
         return {
@@ -250,6 +262,14 @@ class RedisStore:
 
     async def history(self, limit: int = 100) -> list[dict]:
         raw = await self._r.lrange("fst:history", 0, limit - 1)
+        return [orjson.loads(v) for v in raw]
+
+    async def record_critique(self, entry: dict) -> None:
+        await self._r.lpush("fst:critiques", orjson.dumps(entry).decode())
+        await self._r.ltrim("fst:critiques", 0, 49)
+
+    async def critiques(self, limit: int = 20) -> list[dict]:
+        raw = await self._r.lrange("fst:critiques", 0, limit - 1)
         return [orjson.loads(v) for v in raw]
 
     async def snapshot(self) -> dict:

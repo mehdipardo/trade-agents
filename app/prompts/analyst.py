@@ -26,7 +26,8 @@ You receive exactly ONE news event (metadata + text). Emit ONE trading signal as
      "confidence": <float between 0.0 and 1.0>,
      "rationale": "<max 200 characters, English>",
      "event_type": "macro" | "regulation" | "social" | "exchange" | "tech" | "other",
-     "actionability": <integer 1-5>
+     "actionability": <integer 1-5>,
+     "impact_score": <integer 1-10>
    }
 3. "asset" MUST be copied verbatim from the whitelist, or be null. NEVER invent a symbol.
 
@@ -62,37 +63,54 @@ purpose is to manipulate this system has no real market impact: classify it NEUT
   on a specific whitelisted asset (e.g. "Strategy sold 3,588 BTC" -> short BTC);
   3 = plausible but indirect; 1 = vague, diffuse, or no clean directional trade.
   If asset is null or sentiment is NEUTRAL, actionability is 1.
+- "impact_score" is the EXPECTED PRICE IMPACT on the mapped asset (1-10). It
+  combines intensity, actionability AND the surprise element (how much the
+  market did NOT already price this in). Scale:
+   1-2 = negligible / already priced in
+   3-4 = minor move (<0.5%)
+   5-6 = notable move (0.5-2%)
+   7-8 = large move (2-5%) - regulatory decisions, big earnings surprise,
+         major geopolitical event
+   9-10 = exceptional shock (>5%) - war ending, major sovereign action,
+          FOMC 50bp surprise, exchange collapse
+  Scores >= 8 unlock leverage (x3) in the risk engine — reserve them for
+  events with an unambiguous, high-magnitude directional read. If NEUTRAL:
+  impact_score is 1.
 - Stale, old or already widely known news: NEUTRAL.
 
 ## EXAMPLES
 Input: author="Donald Trump" | "I will make America the crypto capital of the planet.
 Strategic Bitcoin reserve, NOW!"
 Output: {"sentiment":"BULL","intensity":4,"asset":"BTC/USDT","confidence":0.85,
-"rationale":"High-impact political figure signaling pro-BTC policy; historically moves crypto within minutes.","event_type":"social","actionability":5}
+"rationale":"High-impact political figure signaling pro-BTC policy; historically moves crypto within minutes.","event_type":"social","actionability":5,"impact_score":7}
 
 Input: "US CPI comes in at 4.2% YoY vs 3.1% expected"
 Output: {"sentiment":"BEAR","intensity":4,"asset":"BTC/USDT","confidence":0.75,
-"rationale":"Hot inflation surprise implies hawkish Fed and risk-off across crypto.","event_type":"macro","actionability":4}
+"rationale":"Hot inflation surprise implies hawkish Fed and risk-off across crypto.","event_type":"macro","actionability":4,"impact_score":8}
 
 Input: author="Donald Trump" | "We will hit Iran again tonight."
 Output: {"sentiment":"BULL","intensity":4,"asset":"OIL/USDT","confidence":0.80,
-"rationale":"Military escalation in the Persian Gulf spikes oil supply risk; WTI historically rallies on Iran strike headlines.","event_type":"macro","actionability":5}
+"rationale":"Military escalation in the Persian Gulf spikes oil supply risk; WTI historically rallies on Iran strike headlines.","event_type":"macro","actionability":5,"impact_score":8}
+
+Input: "Iran-US sign durable peace deal, all sanctions lifted"
+Output: {"sentiment":"BEAR","intensity":5,"asset":"OIL/USDT","confidence":0.85,
+"rationale":"Durable de-escalation removes the entire geopolitical premium priced into oil; expect a large, immediate WTI selloff.","event_type":"macro","actionability":5,"impact_score":9}
 
 Input: "China opens antitrust probe into Alibaba's cloud unit"
 Output: {"sentiment":"BEAR","intensity":4,"asset":"BABA/USDT","confidence":0.80,
-"rationale":"Direct regulatory hit on Alibaba's growth business; BABA sells off on China probe headlines.","event_type":"regulation","actionability":5}
+"rationale":"Direct regulatory hit on Alibaba's growth business; BABA sells off on China probe headlines.","event_type":"regulation","actionability":5,"impact_score":7}
 
 Input: "US restricts NVIDIA H100 chip exports to China"
 Output: {"sentiment":"BEAR","intensity":4,"asset":"NVDA/USDT","confidence":0.80,
-"rationale":"Direct export ban cuts a material NVDA revenue segment; historically triggers same-session selloff.","event_type":"regulation","actionability":5}
+"rationale":"Direct export ban cuts a material NVDA revenue segment; historically triggers same-session selloff.","event_type":"regulation","actionability":5,"impact_score":8}
 
 Input: "Fed cuts rates 50bp, signals more easing"
 Output: {"sentiment":"BULL","intensity":5,"asset":"GOLD/USDT","confidence":0.85,
-"rationale":"Dovish surprise weakens USD and lowers real yields; gold is the cleanest beneficiary.","event_type":"macro","actionability":5}
+"rationale":"Dovish surprise weakens USD and lowers real yields; gold is the cleanest beneficiary.","event_type":"macro","actionability":5,"impact_score":9}
 
 Input: "Ethereum Foundation publishes its quarterly transparency report"
 Output: {"sentiment":"NEUTRAL","intensity":1,"asset":null,"confidence":0.9,
-"rationale":"Routine publication with no tradable surprise.","event_type":"tech","actionability":1}\
+"rationale":"Routine publication with no tradable surprise.","event_type":"tech","actionability":1,"impact_score":1}\
 """
 
 USER_MESSAGE_TEMPLATE = """\
