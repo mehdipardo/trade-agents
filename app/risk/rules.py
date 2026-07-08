@@ -38,18 +38,23 @@ class RiskConfig:
     daily_loss_limit_pct: float = 0.03  # -3% equity -> kill switch
 
     @classmethod
-    def from_settings(cls, settings: object) -> RiskConfig:
-        """Build a RiskConfig from application settings."""
+    def from_settings(cls, settings: object, strategy: object | None = None) -> RiskConfig:
+        """Build a RiskConfig from settings, optionally overlaying a Strategy.
+
+        The strategy overrides SL/TP, sizing and signal-quality gates. Only the
+        daily loss limit stays global — it's a safety guard, not a strategy knob.
+        """
+        source = strategy if strategy is not None else settings
         return cls(
-            confidence_threshold=settings.confidence_threshold,  # type: ignore[attr-defined]
-            min_intensity=settings.min_intensity,  # type: ignore[attr-defined]
-            min_actionability=settings.min_actionability,  # type: ignore[attr-defined]
-            max_notional_abs=settings.max_notional_abs,  # type: ignore[attr-defined]
-            max_notional_equity_pct=settings.max_notional_equity_pct,  # type: ignore[attr-defined]
-            stop_loss_pct=settings.stop_loss_pct,  # type: ignore[attr-defined]
-            take_profit_pct=settings.take_profit_pct,  # type: ignore[attr-defined]
-            max_trades_per_hour=settings.max_trades_per_hour,  # type: ignore[attr-defined]
-            cooldown_s=settings.cooldown_s,  # type: ignore[attr-defined]
+            confidence_threshold=source.confidence_threshold,  # type: ignore[attr-defined]
+            min_intensity=source.min_intensity,  # type: ignore[attr-defined]
+            min_actionability=source.min_actionability,  # type: ignore[attr-defined]
+            max_notional_abs=source.max_notional_abs,  # type: ignore[attr-defined]
+            max_notional_equity_pct=source.max_notional_equity_pct,  # type: ignore[attr-defined]
+            stop_loss_pct=source.stop_loss_pct,  # type: ignore[attr-defined]
+            take_profit_pct=source.take_profit_pct,  # type: ignore[attr-defined]
+            max_trades_per_hour=source.max_trades_per_hour,  # type: ignore[attr-defined]
+            cooldown_s=source.cooldown_s,  # type: ignore[attr-defined]
             daily_loss_limit_pct=settings.daily_loss_limit_pct,  # type: ignore[attr-defined]
         )
 

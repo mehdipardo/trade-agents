@@ -12,6 +12,7 @@ from fastapi import APIRouter
 
 from app.config import get_settings
 from app.services.store import get_store
+from app.services.strategy import DEFAULT_STRATEGY_ID, list_strategies
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
 
@@ -55,3 +56,11 @@ async def positions() -> dict[str, object]:
     """Currently open positions + risk-state snapshot."""
     store = get_store()
     return {"positions": await store.open_positions(), "state": await store.snapshot()}
+
+
+@router.get("/strategies")
+async def strategies() -> dict[str, object]:
+    """List every available strategy plus the id of the active one."""
+    store = get_store()
+    active_id = await store.get_strategy_id() or DEFAULT_STRATEGY_ID
+    return {"strategies": list_strategies(), "active": active_id}

@@ -16,6 +16,7 @@ from app.ingestion.normalizer import normalize_payload
 from app.ingestion.simulator import list_scenarios, load_scenario
 from app.logging_config import get_logger
 from app.services.store import get_store
+from app.services.strategy import set_active_strategy
 
 log = get_logger("app.api.admin")
 
@@ -103,3 +104,22 @@ async def killswitch(body: KillSwitchRequest) -> dict[str, Any]:
 async def state() -> dict[str, Any]:
     """Return a snapshot of the risk state (counters, positions, kill switch)."""
     return await get_store().snapshot()
+
+
+class StrategyRequest(BaseModel):
+    """Body for ``POST /admin/strategy``."""
+
+    id: str
+
+
+@router.post("/strategy")
+async def set_strategy(body: StrategyRequest) -> dict[str, Any]:
+    """Switch the active strategy (SL/TP, sizing, gates applied from next event)."""
+    try:
+        strategy = await set_active_strategy(body.id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    log.info("strategy_set", strategy_id=strategy.id, strategy_name=strategy.name)
+    return {"active": strategy.id, "name": strategy.name}

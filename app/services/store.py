@@ -35,6 +35,10 @@ class Store(Protocol):
     async def get_kill_switch(self) -> bool: ...
     async def set_kill_switch(self, active: bool, reason: str | None = None) -> None: ...
 
+    # Active strategy id (persisted so it survives restarts)
+    async def get_strategy_id(self) -> str | None: ...
+    async def set_strategy_id(self, strategy_id: str) -> None: ...
+
     # Risk counters / cooldowns / positions
     async def trades_last_hour(self) -> int: ...
     async def record_trade(self, asset: str, cooldown_s: int) -> None: ...
@@ -71,6 +75,7 @@ class InMemoryStore:
         self._pnl: dict[str, float] = {}  # day -> pnl
         self._dedup: dict[str, float] = {}  # key -> expiry epoch
         self._history: list[dict] = []  # recent pipeline results (bounded)
+        self._strategy_id: str | None = None
 
     async def connect(self) -> None:
         log.info("store_backend", backend="in-memory")
@@ -84,6 +89,12 @@ class InMemoryStore:
     async def set_kill_switch(self, active: bool, reason: str | None = None) -> None:
         self._kill_switch = active
         self._kill_reason = reason if active else None
+
+    async def get_strategy_id(self) -> str | None:
+        return self._strategy_id
+
+    async def set_strategy_id(self, strategy_id: str) -> None:
+        self._strategy_id = strategy_id
 
     def _trim_trades(self, now: float) -> None:
         cutoff = now - _HOUR_S
@@ -160,6 +171,7 @@ class RedisStore:
 
     KILL_KEY = "fst:killswitch"
     KILL_REASON_KEY = "fst:killswitch:reason"
+    STRATEGY_KEY = "fst:strategy"
     TRADES_ZSET = "fst:trades"
 
     def __init__(self, client) -> None:  # noqa: ANN001 - redis.asyncio client
@@ -181,6 +193,13 @@ class RedisStore:
             await self._r.set(self.KILL_REASON_KEY, reason or "")
         else:
             await self._r.delete(self.KILL_KEY, self.KILL_REASON_KEY)
+
+    async def get_strategy_id(self) -> str | None:
+        val = await self._r.get(self.STRATEGY_KEY)
+        return val or None
+
+    async def set_strategy_id(self, strategy_id: str) -> None:
+        await self._r.set(self.STRATEGY_KEY, strategy_id)
 
     async def trades_last_hour(self) -> int:
         now = time.time()

@@ -15,6 +15,7 @@ from app.graph.state import TradingState
 from app.graph.timing import timed_node
 from app.risk.rules import RiskConfig, RiskContext, daily_loss_breached, evaluate
 from app.services.store import get_store
+from app.services.strategy import get_active_strategy
 
 
 @timed_node("risk")
@@ -23,7 +24,8 @@ async def risk_node(state: TradingState) -> dict[str, Any]:
     assert signal is not None  # routing guarantees a tradable signal here
 
     settings = get_settings()
-    config = RiskConfig.from_settings(settings)
+    strategy = await get_active_strategy()
+    config = RiskConfig.from_settings(settings, strategy)
     store = get_store()
 
     asset = signal.asset or ""
