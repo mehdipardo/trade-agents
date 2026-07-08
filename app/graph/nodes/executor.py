@@ -28,6 +28,7 @@ log = get_logger("app.graph.executor")
 
 # Mock reference prices (USDT) used by the offline paper fill.
 _MOCK_PRICES = {
+    # Crypto
     "BTC/USDT": 60000.0,
     "ETH/USDT": 3000.0,
     "SOL/USDT": 150.0,
@@ -36,6 +37,18 @@ _MOCK_PRICES = {
     "BTC/USD:USD": 60000.0,
     "ETH/USD:USD": 3000.0,
     "SOL/USD:USD": 150.0,
+    # TradFi (MEXC perpetuals)
+    "GOLD/USDT": 4088.0,
+    "SILVER/USDT": 52.0,
+    "OIL/USDT": 73.6,
+    "SPX/USDT": 6100.0,
+    "BABA/USDT": 109.3,
+    "TSLA/USDT": 350.0,
+    "NVDA/USDT": 180.0,
+    "AVGO/USDT": 391.0,
+    "AAPL/USDT": 240.0,
+    "MSFT/USDT": 440.0,
+    "META/USDT": 700.0,
 }
 
 
@@ -44,32 +57,47 @@ def client_order_id(event_id: str) -> str:
     return f"fst-{abs(hash(event_id))}"
 
 
-def _position_detail(symbol: str, side: str, entry_price: float, amount: float) -> dict:
+def _position_detail(
+    symbol: str,
+    side: str,
+    entry_price: float,
+    amount: float,
+    stop_loss_pct: float,
+    take_profit_pct: float,
+) -> dict:
     from app.services.position_monitor import sl_tp_prices
 
-    settings = get_settings()
-    sl_price, tp_price = sl_tp_prices(
-        side, entry_price, settings.stop_loss_pct, settings.take_profit_pct
-    )
+    sl_price, tp_price = sl_tp_prices(side, entry_price, stop_loss_pct, take_profit_pct)
     return {
         "symbol": symbol,
         "side": side,  # buy = long, sell = short
         "entry_price": entry_price,
         "amount": amount,
-        "stop_loss_pct": settings.stop_loss_pct,
-        "take_profit_pct": settings.take_profit_pct,
+        "stop_loss_pct": stop_loss_pct,
+        "take_profit_pct": take_profit_pct,
         "stop_loss_price": round(sl_price, 8),
         "take_profit_price": round(tp_price, 8),
         "opened_at": datetime.now(UTC).isoformat(),
     }
 
 
-async def _record(symbol: str, side: str, entry_price: float, amount: float) -> None:
+async def _record(
+    symbol: str,
+    side: str,
+    entry_price: float,
+    amount: float,
+    stop_loss_pct: float,
+    take_profit_pct: float,
+    cooldown_s: int,
+) -> None:
     store = get_store()
-    settings = get_settings()
-    await store.record_trade(symbol, cooldown_s=settings.cooldown_s)
+    await store.record_trade(symbol, cooldown_s=cooldown_s)
     await store.set_position(
-        symbol, is_open=True, detail=_position_detail(symbol, side, entry_price, amount)
+        symbol,
+        is_open=True,
+        detail=_position_detail(
+            symbol, side, entry_price, amount, stop_loss_pct, take_profit_pct
+        ),
     )
 
 
@@ -80,6 +108,7 @@ async def _offline_fill(state: TradingState) -> dict[str, Any]:
     price = _MOCK_PRICES.get(symbol, 1.0)
     amount = round(risk.position_size_quote / price, 8)  # type: ignore[union-attr]
     side = risk.side or "buy"  # type: ignore[union-attr]
+    settings = get_settings()
 
     order = OrderResult(
         order_id=f"paper-{event.id[:8]}",
@@ -91,7 +120,12 @@ async def _offline_fill(state: TradingState) -> dict[str, Any]:
         status="filled",
         exchange_latency_ms=int((perf_counter() - t0) * 1000),
     )
-    await _record(symbol, side, price, amount)
+    await _record(
+        symbol, side, price, amount,
+        risk.stop_loss_pct,  # type: ignore[union-attr]
+        risk.take_profit_pct,  # type: ignore[union-attr]
+        settings.cooldown_s,
+    )
     log.info("paper_fill", event_id=event.id, symbol=symbol, side=side, amount=amount)
     await emit("order", event_id=event.id, payload=order.model_dump())
     return {"order": order, "status": "executed"}
@@ -134,7 +168,13 @@ async def _live_fill(state: TradingState, ex: ExchangeClient) -> dict[str, Any]:
         status="filled" if raw.get("status") in ("closed", "filled") else "open",
         exchange_latency_ms=int((perf_counter() - t0) * 1000),
     )
-    await _record(symbol, side, float(avg_price or price), float(filled))
+    settings = get_settings()
+    await _record(
+        symbol, side, float(avg_price or price), float(filled),
+        risk.stop_loss_pct,  # type: ignore[union-attr]
+        risk.take_profit_pct,  # type: ignore[union-attr]
+        settings.cooldown_s,
+    )
     log.info("live_fill", event_id=event.id, symbol=symbol, side=side, amount=order.amount)
     await emit("order", event_id=event.id, payload=order.model_dump())
     return {"order": order, "status": "executed"}

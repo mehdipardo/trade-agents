@@ -1,0 +1,8 @@
+{
+  "author": "Reuters",
+  "title": "US bans NVIDIA H100 chip exports to China",
+  "content": "The Commerce Department announced a broad ban on NVIDIA H100 chip exports to China effective immediately. Analysts estimate the restriction removes ~15% of Nvidia's projected 2026 revenue and will trigger a same-session selloff.",
+  "url": "https://example.test/news/nvda-china-ban",
+  "published_at": "2026-07-08T18:00:00Z",
+  "_expected": "BEAR 4, NVDA/USDT, short executed"
+}

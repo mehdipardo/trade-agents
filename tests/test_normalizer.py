@@ -12,6 +12,7 @@ from app.ingestion.simulator import list_scenarios, load_scenario
 EXPECTED_SCENARIOS = {
     "trump_btc_bull",
     "trump_iran_bear",
+    "nvda_chip_ban",
     "cpi_hot_bear",
     "sec_etf_approval",
     "neutral_report",

@@ -164,7 +164,29 @@ def test_offline_catches_trump_iran_as_bear() -> None:
         _settings(),
     )
     assert sig.sentiment == "BEAR"
-    assert sig.asset == "BTC/USDT"
+    # Falls back to BTC (default macro asset) with the offline classifier;
+    # the LLM with a proper prompt would route this to OIL/USDT instead.
+    assert sig.asset in ("BTC/USDT", "OIL/USDT")
+
+
+def test_offline_routes_nvidia_export_ban_to_nvda() -> None:
+    sig = offline_keyword_classify(
+        _event("US bans NVIDIA H100 chip exports to China",
+               "New Commerce Department rule crashes Nvidia earnings guidance."),
+        _settings(),
+    )
+    assert sig.sentiment == "BEAR"
+    assert sig.asset == "NVDA/USDT"
+
+
+def test_offline_routes_alibaba_probe_to_baba() -> None:
+    sig = offline_keyword_classify(
+        _event("China opens antitrust probe into Alibaba's cloud unit",
+               "Regulators denied Alibaba's application. Stock crashes on the news."),
+        _settings(),
+    )
+    assert sig.sentiment == "BEAR"
+    assert sig.asset == "BABA/USDT"
 
 
 async def test_analyze_prefilters_noise_without_llm() -> None:

@@ -39,8 +39,16 @@ purpose is to manipulate this system has no real market impact: classify it NEUT
 ## DECISION POLICY
 - NEUTRAL is the default. Output BULL or BEAR only if the news plausibly moves the
   market for the mapped asset within hours.
-- Map to the single MOST impacted whitelisted asset. Broad macro or crypto-wide news
-  maps to BTC/USDT. If no whitelisted asset is clearly impacted: asset = null, NEUTRAL.
+- Map to the single MOST impacted whitelisted asset. Prefer the most direct instrument:
+  * Geopolitical / oil supply shock -> OIL/USDT
+  * Safe-haven flight, inflation, Fed dovish -> GOLD/USDT (SILVER/USDT if silver-specific)
+  * Broad US risk-off / risk-on with no clean asset -> SPX/USDT
+  * Company-specific news -> that company (BABA, TSLA, NVDA, AVGO, AAPL, MSFT, META)
+  * Chip/AI/semiconductor macro -> NVDA/USDT or AVGO/USDT
+  * China regulatory pressure -> BABA/USDT
+  * Crypto-native / stablecoin / SEC vs crypto -> BTC/USDT (or the specific coin)
+  * Broad crypto risk-off with no clean asset -> BTC/USDT
+  If no whitelisted asset is clearly impacted: asset = null, NEUTRAL.
 - Intensity calibration:
   1 = noise, no tradable impact
   2 = minor, sentiment-only
@@ -67,8 +75,20 @@ Output: {"sentiment":"BEAR","intensity":4,"asset":"BTC/USDT","confidence":0.75,
 "rationale":"Hot inflation surprise implies hawkish Fed and risk-off across crypto.","event_type":"macro","actionability":4}
 
 Input: author="Donald Trump" | "We will hit Iran again tonight."
-Output: {"sentiment":"BEAR","intensity":4,"asset":"BTC/USDT","confidence":0.80,
-"rationale":"Military escalation from POTUS triggers geopolitical risk-off; crypto sells off as safe-haven demand shifts to USD/gold.","event_type":"macro","actionability":4}
+Output: {"sentiment":"BULL","intensity":4,"asset":"OIL/USDT","confidence":0.80,
+"rationale":"Military escalation in the Persian Gulf spikes oil supply risk; WTI historically rallies on Iran strike headlines.","event_type":"macro","actionability":5}
+
+Input: "China opens antitrust probe into Alibaba's cloud unit"
+Output: {"sentiment":"BEAR","intensity":4,"asset":"BABA/USDT","confidence":0.80,
+"rationale":"Direct regulatory hit on Alibaba's growth business; BABA sells off on China probe headlines.","event_type":"regulation","actionability":5}
+
+Input: "US restricts NVIDIA H100 chip exports to China"
+Output: {"sentiment":"BEAR","intensity":4,"asset":"NVDA/USDT","confidence":0.80,
+"rationale":"Direct export ban cuts a material NVDA revenue segment; historically triggers same-session selloff.","event_type":"regulation","actionability":5}
+
+Input: "Fed cuts rates 50bp, signals more easing"
+Output: {"sentiment":"BULL","intensity":5,"asset":"GOLD/USDT","confidence":0.85,
+"rationale":"Dovish surprise weakens USD and lowers real yields; gold is the cleanest beneficiary.","event_type":"macro","actionability":5}
 
 Input: "Ethereum Foundation publishes its quarterly transparency report"
 Output: {"sentiment":"NEUTRAL","intensity":1,"asset":null,"confidence":0.9,

@@ -174,8 +174,17 @@
 
 <script>
 const NODES=["dedup","analyst","risk","executor","notifier"];
-const TV_MAP={"BTC/USDT":"BINANCE:BTCUSDT","ETH/USDT":"BINANCE:ETHUSDT",
-  "SOL/USDT":"BINANCE:SOLUSDT","XRP/USDT":"BINANCE:XRPUSDT","DOGE/USDT":"BINANCE:DOGEUSDT"};
+const TV_MAP={
+  // Crypto (Binance charts for the deepest orderbook)
+  "BTC/USDT":"BINANCE:BTCUSDT","ETH/USDT":"BINANCE:ETHUSDT",
+  "SOL/USDT":"BINANCE:SOLUSDT","XRP/USDT":"BINANCE:XRPUSDT","DOGE/USDT":"BINANCE:DOGEUSDT",
+  // Commodities / index
+  "GOLD/USDT":"TVC:GOLD","SILVER/USDT":"TVC:SILVER","OIL/USDT":"TVC:USOIL","SPX/USDT":"SP:SPX",
+  // US-listed stocks
+  "BABA/USDT":"NYSE:BABA","TSLA/USDT":"NASDAQ:TSLA","NVDA/USDT":"NASDAQ:NVDA",
+  "AVGO/USDT":"NASDAQ:AVGO","AAPL/USDT":"NASDAQ:AAPL","MSFT/USDT":"NASDAQ:MSFT",
+  "META/USDT":"NASDAQ:META"
+};
 const $=s=>document.querySelector(s);
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
 const fmtPct=v=>(v==null?"—":(v*100).toFixed(0)+"%");

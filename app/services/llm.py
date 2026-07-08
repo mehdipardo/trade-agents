@@ -58,6 +58,7 @@ _BEAR_KEYWORDS = (
     "retaliat", "nuclear", "shoot",
 )
 _ASSET_KEYWORDS = {
+    # --- Crypto -------------------------------------------------------
     "solana": "SOL/USDT",
     "sol": "SOL/USDT",
     "ethereum": "ETH/USDT",
@@ -68,6 +69,35 @@ _ASSET_KEYWORDS = {
     "doge": "DOGE/USDT",
     "bitcoin": "BTC/USDT",
     "btc": "BTC/USDT",
+    # --- Commodities / index (TradFi perpetuals on MEXC) --------------
+    "gold": "GOLD/USDT",
+    "xau": "GOLD/USDT",
+    "silver": "SILVER/USDT",
+    "xag": "SILVER/USDT",
+    "oil": "OIL/USDT",
+    "crude": "OIL/USDT",
+    "wti": "OIL/USDT",
+    "brent": "OIL/USDT",
+    "spx": "SPX/USDT",
+    "sp500": "SPX/USDT",
+    # --- Individual stocks --------------------------------------------
+    "alibaba": "BABA/USDT",
+    "baba": "BABA/USDT",
+    "tesla": "TSLA/USDT",
+    "tsla": "TSLA/USDT",
+    "musk": "TSLA/USDT",
+    "nvidia": "NVDA/USDT",
+    "nvda": "NVDA/USDT",
+    "broadcom": "AVGO/USDT",
+    "avgo": "AVGO/USDT",
+    "apple": "AAPL/USDT",
+    "aapl": "AAPL/USDT",
+    "iphone": "AAPL/USDT",
+    "microsoft": "MSFT/USDT",
+    "msft": "MSFT/USDT",
+    "facebook": "META/USDT",
+    "zuckerberg": "META/USDT",
+    "instagram": "META/USDT",
 }
 
 # Relevance pre-filter (funnel stage 1, free): terms that signal a plausibly
@@ -80,6 +110,11 @@ _MACRO_KEYWORDS = (
     "trump", "war", "iran", "attack", "military", "strike", "missile", "bomb",
     "invasion", "conflict", "nuclear", "geopolit", "escalat", "ceasefire",
     "peace deal", "retaliat",
+    # TradFi assets (perpetuals available on MEXC).
+    "gold", "xau", "silver", "oil", "crude", "wti", "brent", "spx", "sp500",
+    "tesla", "musk", "nvidia", "apple", "iphone", "microsoft", "meta",
+    "facebook", "alibaba", "broadcom", "earnings", "guidance", "chip",
+    "semiconductor", "opec",
 )
 
 

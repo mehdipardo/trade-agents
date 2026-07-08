@@ -46,12 +46,20 @@ class Settings(BaseSettings):
 
     # --- Exchange --------------------------------------------------------
     # Futures testnet so agents can short (Binance Futures is geo-blocked in FR).
-    exchange_id: str = "krakenfutures"
+    # MEXC covers both crypto perpetuals AND TradFi perpetuals (stocks, indices,
+    # commodities) — a single venue for the whole whitelist. Kraken Futures
+    # stays supported but only sees the crypto subset.
+    exchange_id: str = "mexc"
     exchange_api_key: str = ""
     exchange_secret: str = ""
 
     # --- Trading universe / thresholds -----------------------------------
-    asset_whitelist: str = "BTC/USDT,ETH/USDT,SOL/USDT,XRP/USDT,DOGE/USDT"
+    # Mixed crypto + TradFi (MEXC perpetuals cover both).
+    asset_whitelist: str = (
+        "BTC/USDT,ETH/USDT,SOL/USDT,XRP/USDT,DOGE/USDT,"
+        "GOLD/USDT,SILVER/USDT,OIL/USDT,SPX/USDT,"
+        "BABA/USDT,TSLA/USDT,NVDA/USDT,AVGO/USDT,AAPL/USDT,MSFT/USDT,META/USDT"
+    )
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
 
     # --- Risk engine (see app/risk/rules.py) -----------------------------
