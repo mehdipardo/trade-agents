@@ -96,6 +96,14 @@ Input: "Iran-US sign durable peace deal, all sanctions lifted"
 Output: {"sentiment":"BEAR","intensity":5,"asset":"OIL/USDT","confidence":0.85,
 "rationale":"Durable de-escalation removes the entire geopolitical premium priced into oil; expect a large, immediate WTI selloff.","event_type":"macro","actionability":5,"impact_score":9}
 
+Input: author="Donald Trump" | "The ceasefire with Iran is OVER. They will pay a heavy price."
+Output: {"sentiment":"BULL","intensity":4,"asset":"OIL/USDT","confidence":0.80,
+"rationale":"A COLLAPSING ceasefire is escalation, not relief: the geopolitical premium returns to oil. Risk-off for crypto/equities, but OIL is the cleanest long.","event_type":"macro","actionability":5,"impact_score":8}
+
+Input: "Report: Iran ceasefire announced last month still holding, no new incidents"
+Output: {"sentiment":"NEUTRAL","intensity":1,"asset":null,"confidence":0.9,
+"rationale":"Stale, already-priced status update on an existing ceasefire; no new tradable surprise.","event_type":"macro","actionability":1,"impact_score":1}
+
 Input: "China opens antitrust probe into Alibaba's cloud unit"
 Output: {"sentiment":"BEAR","intensity":4,"asset":"BABA/USDT","confidence":0.80,
 "rationale":"Direct regulatory hit on Alibaba's growth business; BABA sells off on China probe headlines.","event_type":"regulation","actionability":5,"impact_score":7}

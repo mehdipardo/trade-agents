@@ -61,6 +61,11 @@ class Settings(BaseSettings):
         "BABA/USDT,TSLA/USDT,NVDA/USDT,AVGO/USDT,AAPL/USDT,MSFT/USDT,META/USDT"
     )
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    # Freshness gate: drop events whose published_at is older than this (seconds).
+    # Guards against stale / re-syndicated news re-triggering trades (a broad
+    # aggregator often re-surfaces old stories). 0 disables the gate. Events with
+    # no published_at are treated as fresh (stamped at reception).
+    max_news_age_s: int = Field(default=21600, ge=0)  # 6 hours
 
     # --- Risk engine (see app/risk/rules.py) -----------------------------
     min_intensity: int = Field(default=3, ge=1, le=5)

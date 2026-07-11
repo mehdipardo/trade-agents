@@ -46,8 +46,10 @@ _INJECTION_MARKERS = (
 _BULL_KEYWORDS = (
     "reserve", "approve", "approval", "etf", "adopt", "capital", "partnership",
     "buys", "accumulat", "rally", "surge", "inflow",
-    # Geopolitical de-escalation → risk-on relief rally.
-    "ceasefire", "peace deal", "de-escalat",
+    # Geopolitical de-escalation → risk-on relief rally. NOTE: only counted when
+    # NOT negated — see _CONFLICT_NEGATORS / the escalation override below, which
+    # runs first (a "ceasefire is over" headline is escalation, not relief).
+    "ceasefire", "truce", "peace deal", "peace agreement", "de-escalat",
 )
 _BEAR_KEYWORDS = (
     "cpi", "inflation", "hack", "ban", "lawsuit", "crash", "denied", "hawkish",
@@ -57,6 +59,21 @@ _BEAR_KEYWORDS = (
     "war", "attack", "strike", "bomb", "missile", "invasion", "escalat",
     "retaliat", "nuclear", "shoot",
 )
+
+# A de-escalation word (ceasefire/truce/peace) combined with a negator means the
+# de-escalation is BREAKING DOWN → renewed conflict → risk-off (and oil/gold up).
+# Requiring BOTH a de-escalation word AND a negator keeps false positives low.
+_DEESCALATION_KEYWORDS = (
+    "ceasefire", "truce", "peace deal", "peace agreement", "peace talks", "de-escalat",
+)
+_CONFLICT_NEGATORS = (
+    "over", "ended", "ends", "collaps", "broke", "broken", "break down",
+    "breaks down", "breaking down", "terminat", "resume", "resuming", "called off",
+    "cancel", "fail", "violat", "breach", "no longer", "off the table", "abandon",
+)
+# Under escalation, these instruments RISE (safe-haven / supply-risk); everything
+# else (crypto, indices, single stocks) falls.
+_ESCALATION_RISK_ON = ("OIL/USDT", "GOLD/USDT", "SILVER/USDT")
 _ASSET_KEYWORDS = {
     # --- Crypto -------------------------------------------------------
     "solana": "SOL/USDT",
@@ -144,6 +161,16 @@ def is_relevant(event: NewsEvent, settings: Settings) -> bool:
     return any(k in text for k in _MACRO_KEYWORDS)
 
 
+def _map_asset(text: str, whitelist: tuple[str, ...]) -> str | None:
+    """Map free text to the single most-impacted whitelisted symbol (or None)."""
+    for keyword, symbol in _ASSET_KEYWORDS.items():
+        # Word-boundary match so short tickers don't match inside other words
+        # (e.g. "sol" must not match "sold").
+        if re.search(rf"\b{keyword}\b", text) and symbol in whitelist:
+            return symbol
+    return None
+
+
 def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
     """Deterministic keyword classifier used when no LLM key is configured."""
     text = f"{event.title}\n{event.content}".lower()
@@ -161,6 +188,31 @@ def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
             impact_score=1,
         )
 
+    # --- Escalation override (runs before the naive bull/bear tie logic) ------
+    # "ceasefire is over", "peace deal collapses", "truce breaks down" all read
+    # as bullish de-escalation to a naive keyword match. They are the opposite:
+    # renewed conflict = risk-off (crypto/indices down) and oil/gold up.
+    if any(k in text for k in _DEESCALATION_KEYWORDS) and any(
+        k in text for k in _CONFLICT_NEGATORS
+    ):
+        asset = _map_asset(text, whitelist) or (
+            "BTC/USDT" if "BTC/USDT" in whitelist else None
+        )
+        # Safe-haven / supply-risk instruments rise; everything else falls.
+        sentiment = "BULL" if asset in _ESCALATION_RISK_ON else "BEAR"
+        if sentiment == "BEAR" and asset is None and "BTC/USDT" in whitelist:
+            asset = "BTC/USDT"
+        return Signal(
+            sentiment=sentiment,
+            intensity=4,
+            asset=asset,
+            confidence=0.7,
+            rationale="De-escalation breaking down → geopolitical escalation (risk-off).",
+            event_type="macro",
+            actionability=4 if asset is not None else 1,
+            impact_score=7,
+        )
+
     is_bull = any(k in text for k in _BULL_KEYWORDS)
     is_bear = any(k in text for k in _BEAR_KEYWORDS)
     if is_bull == is_bear:
@@ -175,13 +227,7 @@ def offline_keyword_classify(event: NewsEvent, settings: Settings) -> Signal:
             impact_score=1,
         )
 
-    asset: str | None = None
-    for keyword, symbol in _ASSET_KEYWORDS.items():
-        # Word-boundary match so short tickers don't match inside other words
-        # (e.g. "sol" must not match "sold").
-        if re.search(rf"\b{keyword}\b", text) and symbol in whitelist:
-            asset = symbol
-            break
+    asset = _map_asset(text, whitelist)
     if asset is None and "BTC/USDT" in whitelist:
         asset = "BTC/USDT"  # broad macro/crypto-wide -> BTC
 

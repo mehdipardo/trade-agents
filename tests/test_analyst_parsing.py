@@ -169,6 +169,34 @@ def test_offline_catches_trump_iran_as_bear() -> None:
     assert sig.asset in ("BTC/USDT", "OIL/USDT")
 
 
+def test_offline_ceasefire_over_is_escalation_not_relief() -> None:
+    # Regression: "ceasefire is over" used to read as bullish de-escalation
+    # (the word "ceasefire" alone) and open a wrong-way long. A collapsing
+    # ceasefire is escalation -> risk-off.
+    sig = offline_keyword_classify(
+        _event("Trump: The ceasefire with Iran is over"), _settings()
+    )
+    assert sig.sentiment == "BEAR"
+    assert sig.asset == "BTC/USDT"
+
+
+def test_offline_ceasefire_breakdown_routes_oil_bull() -> None:
+    # Escalation lifts safe-haven / supply-risk assets: oil goes up.
+    sig = offline_keyword_classify(
+        _event("Oil spikes as Iran ceasefire breaks down"), _settings()
+    )
+    assert sig.sentiment == "BULL"
+    assert sig.asset == "OIL/USDT"
+
+
+def test_offline_genuine_ceasefire_stays_bullish_relief() -> None:
+    # A real, NON-negated de-escalation is still a risk-on relief rally.
+    sig = offline_keyword_classify(
+        _event("Iran and US agree ceasefire, tensions ease"), _settings()
+    )
+    assert sig.sentiment == "BULL"
+
+
 def test_offline_routes_nvidia_export_ban_to_nvda() -> None:
     sig = offline_keyword_classify(
         _event("US bans NVIDIA H100 chip exports to China",

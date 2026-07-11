@@ -26,6 +26,7 @@ _STATUS_EMOJI = {
     "rejected_risk": "🚫",
     "skipped_neutral": "⚪",
     "skipped_duplicate": "⚪",
+    "skipped_stale": "🕒",
     "failed": "🔴",
     "received": "⚪",
 }

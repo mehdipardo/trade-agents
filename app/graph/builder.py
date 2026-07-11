@@ -2,7 +2,7 @@
 
 Builds and compiles the trading pipeline:
 
-    entry -> dedup --(duplicate)------------------> notifier -> END
+    entry -> dedup --(duplicate/stale)------------> notifier -> END
                    \\--(new)--> analyst --(neutral/low-conf/null/err)--> notifier
                                         \\--(tradable)--> risk --(rejected)--> notifier
                                                               \\--(approved)--> executor -> notifier
@@ -32,7 +32,8 @@ from app.graph.state import TradingState
 
 
 def _route_after_dedup(state: TradingState) -> Literal["analyst", "notifier"]:
-    return "notifier" if state["status"] == "skipped_duplicate" else "analyst"
+    # Only a still-flowing ("received") state proceeds; duplicate/stale stop here.
+    return "analyst" if state["status"] == "received" else "notifier"
 
 
 def _route_after_analyst(state: TradingState) -> Literal["risk", "notifier"]:

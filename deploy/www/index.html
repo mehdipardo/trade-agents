@@ -216,9 +216,9 @@ const $=s=>document.querySelector(s);
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
 const fmtPct=v=>(v==null?"—":(v*100).toFixed(0)+"%");
 const badgeClass=s=>({executed:"b-exec",rejected_risk:"b-rej",skipped_neutral:"b-skip",
-  skipped_duplicate:"b-skip",failed:"b-fail"}[s]||"b-skip");
+  skipped_duplicate:"b-skip",skipped_stale:"b-skip",failed:"b-fail"}[s]||"b-skip");
 const emojiOf=s=>({executed:"🟢",rejected_risk:"🚫",skipped_neutral:"⚪",
-  skipped_duplicate:"⚪",failed:"🔴"}[s]||"⚪");
+  skipped_duplicate:"⚪",skipped_stale:"🕒",failed:"🔴"}[s]||"⚪");
 
 const pipe=$("#pipe"), nodeEls={};
 NODES.forEach((n,i)=>{

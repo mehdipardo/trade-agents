@@ -13,6 +13,7 @@ from app.models.schemas import NewsEvent, OrderResult, RiskVerdict, Signal
 Status = Literal[
     "received",  # event normalized, entered the graph
     "skipped_duplicate",  # stopped by dedup
+    "skipped_stale",  # stopped by dedup: published_at too old (already priced in)
     "skipped_neutral",  # NEUTRAL / confidence < threshold / asset null
     "rejected_risk",  # risk engine veto
     "executed",  # order placed on the testnet
