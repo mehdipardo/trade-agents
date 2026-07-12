@@ -69,6 +69,34 @@ def test_normalize_raises_without_title_or_content() -> None:
         normalize_payload({"author": "nobody"}, source="webhook")
 
 
+def test_rfc822_date_is_parsed_not_dropped() -> None:
+    # Regression: RSS/aggregator feeds use RFC 822 dates. A bad date must NEVER
+    # drop the whole event (that silently starved the pipeline of news).
+    event = normalize_payload(
+        {"title": "BTC headline", "published_at": "Mon, 07 Jul 2025 12:00:00 GMT"},
+        source="news",
+    )
+    assert event.title == "BTC headline"
+    assert event.published_at is not None
+    assert event.published_at.tzinfo is not None
+
+
+def test_unparseable_date_falls_back_to_none_and_keeps_event() -> None:
+    event = normalize_payload(
+        {"title": "keep me", "published_at": "yesterday-ish"}, source="news"
+    )
+    assert event.title == "keep me"
+    assert event.published_at is None  # event kept, date simply dropped
+
+
+def test_epoch_seconds_date_parsed() -> None:
+    event = normalize_payload(
+        {"title": "epoch news", "date": "1752345600"}, source="news"
+    )
+    assert event.published_at is not None
+    assert event.published_at.year == 2025
+
+
 def test_all_scenarios_present() -> None:
     assert set(list_scenarios()) == EXPECTED_SCENARIOS
 

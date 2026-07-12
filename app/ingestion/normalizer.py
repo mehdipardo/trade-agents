@@ -12,9 +12,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any, Literal
 
+from app.logging_config import get_logger
 from app.models.schemas import NewsEvent
+
+log = get_logger("app.ingestion.normalizer")
 
 Source = Literal[
     "webhook", "rss", "simulator", "social", "economic", "regulatory", "news"
@@ -34,6 +38,51 @@ def _first(payload: dict[str, Any], keys: tuple[str, ...]) -> Any | None:
         value = payload.get(key)
         if value not in (None, ""):
             return value
+    return None
+
+
+def _parse_published_at(value: Any) -> datetime | None:
+    """Best-effort parse of a published timestamp into an aware datetime.
+
+    News feeds carry dates in many shapes: ISO 8601, RFC 822 (RSS —
+    "Mon, 07 Jul 2025 12:00:00 GMT"), or epoch seconds. The timestamp is
+    OPTIONAL metadata, so on any parse failure we return ``None`` rather than
+    let a bad date string fail ``NewsEvent`` validation and silently drop the
+    whole event (which would starve the pipeline of news).
+    """
+    if value in (None, ""):
+        return None
+    # Already a datetime (some callers pass one through).
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    # Epoch seconds (int/float, or a numeric string).
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value), tz=UTC)
+        except (OverflowError, OSError, ValueError):
+            return None
+    text = str(value).strip()
+    if not text:
+        return None
+    # ISO 8601 (handles the trailing "Z").
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+    except ValueError:
+        pass
+    # RFC 822 / 2822 (the RSS default, e.g. "Mon, 07 Jul 2025 12:00:00 GMT").
+    try:
+        dt = parsedate_to_datetime(text)
+        if dt is not None:
+            return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+    except (TypeError, ValueError):
+        pass
+    # Numeric epoch as a string.
+    try:
+        return datetime.fromtimestamp(float(text), tz=UTC)
+    except (ValueError, OverflowError, OSError):
+        pass
+    log.debug("unparseable_published_at", value=text[:40])
     return None
 
 
@@ -73,6 +122,6 @@ def normalize_payload(payload: dict[str, Any], *, source: Source) -> NewsEvent:
         title=str(title),
         content=str(content),
         url=_first(payload, _URL_KEYS),
-        published_at=_first(payload, _PUBLISHED_KEYS),
+        published_at=_parse_published_at(_first(payload, _PUBLISHED_KEYS)),
         received_at=received_at,
     )
