@@ -27,14 +27,20 @@ def _to_event(item: GoldenItem) -> NewsEvent:
     )
 
 
-async def run_eval(items: list[GoldenItem] | None = None) -> tuple[list[Prediction], dict]:
-    """Run the analyst over the golden set; return predictions + metrics report."""
+async def run_eval(
+    items: list[GoldenItem] | None = None, *, prompt_version: str | None = None
+) -> tuple[list[Prediction], dict]:
+    """Run the analyst over the golden set; return predictions + metrics report.
+
+    ``prompt_version`` selects which analyst-prompt version to evaluate (LLM path
+    only; the offline classifier is prompt-independent).
+    """
     settings = get_settings()
     items = items if items is not None else load_golden()
 
     preds: list[Prediction] = []
     for item in items:
-        signal = await analyze(_to_event(item), settings)
+        signal = await analyze(_to_event(item), settings, prompt_version=prompt_version)
         preds.append(
             Prediction(
                 expected_sentiment=item.expected_sentiment,
@@ -44,7 +50,11 @@ async def run_eval(items: list[GoldenItem] | None = None) -> tuple[list[Predicti
                 predicted_asset=signal.asset,
             )
         )
-    return preds, summarize(preds)
+    from app.prompts.analyst import PROMPT_VERSION
+
+    report = summarize(preds)
+    report["prompt_version"] = prompt_version or PROMPT_VERSION
+    return preds, report
 
 
 def format_report(report: dict) -> str:

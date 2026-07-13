@@ -355,9 +355,13 @@ def _post_validate(signal: Signal, settings: Settings) -> Signal:
     return signal
 
 
-async def _analyze_with_llm(event: NewsEvent, settings: Settings, structured_llm: Any) -> Signal:
+async def _analyze_with_llm(
+    event: NewsEvent, settings: Settings, structured_llm: Any, prompt_version: str | None = None
+) -> Signal:
     """Call the structured LLM with bounded retries and NEUTRAL fallback."""
-    system = build_system_prompt(settings.asset_whitelist_set, settings.confidence_threshold)
+    system = build_system_prompt(
+        settings.asset_whitelist_set, settings.confidence_threshold, prompt_version
+    )
     messages: list[Any] = [
         SystemMessage(content=system),
         HumanMessage(content=build_user_message(event)),
@@ -386,7 +390,9 @@ async def _analyze_with_llm(event: NewsEvent, settings: Settings, structured_llm
     return neutral_fallback()
 
 
-async def analyze(event: NewsEvent, settings: Settings, *, llm: Any = _UNSET) -> Signal:
+async def analyze(
+    event: NewsEvent, settings: Settings, *, llm: Any = _UNSET, prompt_version: str | None = None
+) -> Signal:
     """Analyze a news event into a validated ``Signal``.
 
     Args:
@@ -395,6 +401,7 @@ async def analyze(event: NewsEvent, settings: Settings, *, llm: Any = _UNSET) ->
         llm: Optional structured LLM override (for tests). When omitted, one is
             built from settings; if none is available the offline classifier
             is used.
+        prompt_version: Optional analyst-prompt version to render (eval A/B).
     """
     # Funnel stage 1 (free): skip the LLM entirely on obvious noise. Only on the
     # auto path (an explicitly injected llm bypasses the gate for testing).
@@ -408,6 +415,6 @@ async def analyze(event: NewsEvent, settings: Settings, *, llm: Any = _UNSET) ->
         log.info("analyst_offline_mode", event_id=event.id)
         signal = offline_keyword_classify(event, settings)
     else:
-        signal = await _analyze_with_llm(event, settings, structured_llm)
+        signal = await _analyze_with_llm(event, settings, structured_llm, prompt_version)
 
     return _post_validate(signal, settings)

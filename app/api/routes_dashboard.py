@@ -24,6 +24,8 @@ async def health() -> dict[str, object]:
     Returns basic runtime facts, including confirmation that the safety
     guards are active (the app cannot start otherwise).
     """
+    from app.prompts.analyst import PROMPT_VERSION
+
     settings = get_settings()
     return {
         "status": "ok",
@@ -32,9 +34,26 @@ async def health() -> dict[str, object]:
         "exchange_sandbox": settings.exchange_sandbox,
         "exchange_id": settings.exchange_id,
         "llm_provider": settings.llm_provider,
+        "prompt_version": PROMPT_VERSION,
         "asset_whitelist": list(settings.asset_whitelist_set),
         "time": datetime.now(UTC).isoformat(),
     }
+
+
+@router.get("/eval")
+async def eval_report() -> dict[str, object]:
+    """Last persisted analyst-eval report (accuracy, ECE, prompt version).
+
+    Populated by ``python -m app.eval.run``; empty until an eval has been run.
+    """
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "data" / "eval" / "latest.json"
+    if not path.is_file():
+        return {"report": None}
+    import json
+
+    return {"report": json.loads(path.read_text(encoding="utf-8"))}
 
 
 @router.get("/signals")

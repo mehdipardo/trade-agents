@@ -234,3 +234,18 @@ def test_signal_schema_rejects_bad_intensity() -> None:
             rationale="x",
             event_type="macro",
         )
+
+
+def test_prompt_versioning_renders_distinct_templates() -> None:
+    from app.prompts.analyst import PROMPT_VERSION, PROMPT_VERSIONS, build_system_prompt
+
+    wl = ("BTC/USDT", "ETH/USDT")
+    v1 = build_system_prompt(wl, 0.6, version="v1")
+    v2 = build_system_prompt(wl, 0.6, version="v2")
+    assert "v1" in PROMPT_VERSIONS and "v2" in PROMPT_VERSIONS
+    assert v1 != v2
+    assert len(v2) > len(v1)  # v2 is the richer prompt
+    # Both inject the whitelist and threshold.
+    assert '"BTC/USDT"' in v1 and '"BTC/USDT"' in v2
+    # Default (no version) renders the active version.
+    assert build_system_prompt(wl, 0.6) == build_system_prompt(wl, 0.6, version=PROMPT_VERSION)
