@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     # takers. Defaults reflect MEXC USDT-M futures (low). Round trip = 2x taker.
     taker_fee_pct: float = Field(default=0.02, ge=0)
     maker_fee_pct: float = Field(default=0.0, ge=0)
+    # Mark open paper positions against REAL public prices (read-only, no keys)
+    # so SL/TP actually trigger and PnL is real. Falls back to mock on failure.
+    use_live_prices: bool = True
+    price_exchange_id: str = "mexc"  # public exchange used for mark prices
 
     # --- Integrations ----------------------------------------------------
     slack_webhook_url: str = ""

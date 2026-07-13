@@ -127,11 +127,23 @@ async def _record(
     )
 
 
+async def _offline_price(symbol: str) -> float:
+    """Real public price for the paper fill, falling back to a mock reference."""
+    settings = get_settings()
+    if settings.use_live_prices:
+        from app.services.prices import get_price
+
+        live = await get_price(symbol)
+        if live is not None and live > 0:
+            return live
+    return _MOCK_PRICES.get(symbol, 1.0)
+
+
 async def _offline_fill(state: TradingState) -> dict[str, Any]:
     t0 = perf_counter()
     event, signal, risk = state["event"], state["signal"], state["risk"]
     symbol = signal.asset  # type: ignore[union-attr]
-    price = _MOCK_PRICES.get(symbol, 1.0)
+    price = await _offline_price(symbol)
     amount = round(risk.position_size_quote / price, 8)  # type: ignore[union-attr]
     side = risk.side or "buy"  # type: ignore[union-attr]
     settings = get_settings()

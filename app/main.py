@@ -65,6 +65,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_store(settings.redis_url)
     await init_exchange(settings)
 
+    # Public price provider (read-only mark prices, no keys) for realistic paper
+    # marking when running key-less.
+    from app.services import prices
+
+    prices.configure(settings.price_exchange_id)
+
     # Ingestion queue + worker + SL/TP position monitor. Sources are owned by
     # the manager, which reads config from Store first, env second, and can be
     # hot-restarted at runtime from the dashboard.
@@ -86,6 +92,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             except asyncio.CancelledError:
                 pass
         await manager.stop_all()
+        await prices.close()
         exchange = get_exchange()
         if exchange is not None:
             await exchange.close()
