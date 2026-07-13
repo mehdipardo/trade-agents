@@ -73,18 +73,23 @@ async def performance() -> dict[str, object]:
     positions_open = await store.open_positions()
     start = settings.starting_equity_quote
     realized = perf["realized_total"]
+    equity = start + realized
     exposure = sum(
-        float(p.get("entry_price", 0)) * float(p.get("amount", 0)) for p in positions_open
+        float(p.get("notional_quote") or p.get("entry_price", 0) * p.get("amount", 0))
+        for p in positions_open
     )
+    margin_used = sum(float(p.get("margin_quote") or 0.0) for p in positions_open)
     closed = perf["closed_trades"]
     return {
         "starting_equity": start,
-        "equity": round(start + realized, 2),
+        "equity": round(equity, 2),
         "realized_total": realized,
         "return_pct": round(realized / start * 100, 3) if start else 0.0,
         "daily_pnl": snap.get("daily_pnl", 0.0),
         "open_positions": len(positions_open),
         "exposure": round(exposure, 2),
+        "margin_used": round(margin_used, 2),
+        "free_capital": round(max(0.0, equity - margin_used), 2),
         "closed_trades": closed,
         "wins": perf["wins"],
         "win_rate": round(perf["wins"] / closed, 3) if closed else 0.0,

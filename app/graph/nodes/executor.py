@@ -67,6 +67,7 @@ def _position_detail(
     runner_pct: float,
     runner_tp_pct: float,
     leverage: int,
+    margin_leverage: int,
     impact_score: int,
     original_signal: dict | None,
 ) -> dict:
@@ -79,6 +80,8 @@ def _position_detail(
     if runner_pct > 0 and runner_tp_pct > 0:
         _, runner_tp_price = sl_tp_prices(side, entry_price, stop_loss_pct, runner_tp_pct)
         runner_tp_price = round(runner_tp_price, 8)
+    notional = entry_price * amount
+    margin_quote = round(notional / max(1, margin_leverage), 2)
     return {
         "symbol": symbol,
         "side": side,  # buy = long, sell = short
@@ -91,6 +94,9 @@ def _position_detail(
         "runner_pct": runner_pct,
         "runner_tp_pct": runner_tp_pct,
         "leverage": leverage,
+        "margin_leverage": margin_leverage,
+        "notional_quote": round(notional, 2),
+        "margin_quote": margin_quote,
         "impact_score": impact_score,
         "stop_loss_price": round(sl_price, 8),
         "take_profit_price": round(tp_price, 8),
@@ -111,6 +117,7 @@ async def _record(
     runner_pct: float,
     runner_tp_pct: float,
     leverage: int,
+    margin_leverage: int,
     impact_score: int,
     cooldown_s: int,
     original_signal: dict | None,
@@ -122,7 +129,8 @@ async def _record(
         is_open=True,
         detail=_position_detail(
             symbol, side, entry_price, amount, stop_loss_pct, take_profit_pct,
-            runner_pct, runner_tp_pct, leverage, impact_score, original_signal,
+            runner_pct, runner_tp_pct, leverage, margin_leverage, impact_score,
+            original_signal,
         ),
     )
 
@@ -165,6 +173,7 @@ async def _offline_fill(state: TradingState) -> dict[str, Any]:
         risk.runner_pct or 0.0,  # type: ignore[union-attr]
         risk.runner_tp_pct or 0.0,  # type: ignore[union-attr]
         risk.leverage or 1,  # type: ignore[union-attr]
+        risk.margin_leverage or 1,  # type: ignore[union-attr]
         signal.impact_score,  # type: ignore[union-attr]
         settings.cooldown_s,
         signal.model_dump(),  # type: ignore[union-attr]
@@ -219,6 +228,7 @@ async def _live_fill(state: TradingState, ex: ExchangeClient) -> dict[str, Any]:
         risk.runner_pct or 0.0,  # type: ignore[union-attr]
         risk.runner_tp_pct or 0.0,  # type: ignore[union-attr]
         risk.leverage or 1,  # type: ignore[union-attr]
+        risk.margin_leverage or 1,  # type: ignore[union-attr]
         signal.impact_score,  # type: ignore[union-attr]
         settings.cooldown_s,
         signal.model_dump(),  # type: ignore[union-attr]

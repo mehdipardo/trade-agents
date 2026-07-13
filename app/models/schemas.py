@@ -69,8 +69,12 @@ class RiskVerdict(BaseModel):
     # Runner mechanism (partial take-profit).
     runner_pct: float | None = None  # fraction of the position kept as runner (0-1)
     runner_tp_pct: float | None = None  # runner take-profit target
-    # Leverage applied by the strategy (1 by default, boosted on high impact).
+    # High-conviction size boost (1 by default, x multiplier on high impact).
     leverage: int | None = None
+    # Margin leverage: margin locked = notional / margin_leverage. Frees capital
+    # for other triggers without changing the SL/TP value (those are on notional).
+    margin_leverage: int | None = None
+    margin_quote: float | None = None  # margin actually locked for this position
 
 
 class OrderResult(BaseModel):

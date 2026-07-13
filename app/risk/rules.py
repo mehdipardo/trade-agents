@@ -27,6 +27,7 @@ class RiskConfig:
     # Risk-based sizing: fraction of equity lost if the SL is hit.
     risk_per_trade_pct: float = 0.01
     max_gross_exposure: float = 3.0  # notional cap as a multiple of equity
+    margin_leverage: int = 5  # margin locked = notional / margin_leverage
     max_notional_abs: float = 100.0  # legacy (display only)
     max_notional_equity_pct: float = 0.05  # legacy (display only)
     stop_loss_pct: float = 1.5
@@ -57,6 +58,9 @@ class RiskConfig:
             max_gross_exposure=getattr(
                 source, "max_gross_exposure", getattr(settings, "max_gross_exposure", 3.0)
             ),
+            margin_leverage=getattr(
+                source, "margin_leverage", getattr(settings, "margin_leverage", 5)
+            ),
             stop_loss_pct=source.stop_loss_pct,  # type: ignore[attr-defined]
             take_profit_pct=source.take_profit_pct,  # type: ignore[attr-defined]
             max_trades_per_hour=source.max_trades_per_hour,  # type: ignore[attr-defined]
@@ -79,6 +83,7 @@ class RiskContext:
     kill_switch_active: bool
     asset_in_cooldown: bool
     open_position_on_asset: bool
+    free_capital_quote: float = 0.0  # equity minus margin already locked
 
 
 def _reject(reason: str) -> RiskVerdict:
@@ -164,6 +169,17 @@ def evaluate(signal: Signal, ctx: RiskContext, config: RiskConfig) -> RiskVerdic
     if size_quote <= 0:
         return _reject("computed position size is zero")
 
+    # --- Margin & free-capital gate --------------------------------------
+    # Leverage locks only notional/margin_leverage as margin, which is what frees
+    # capital for other triggers. Reject only if even that margin is unavailable.
+    margin_leverage = max(1, config.margin_leverage)
+    margin_quote = size_quote / margin_leverage
+    if margin_quote > ctx.free_capital_quote + 1e-9:
+        return _reject(
+            f"insufficient free margin (need {margin_quote:.2f}, "
+            f"have {ctx.free_capital_quote:.2f})"
+        )
+
     return RiskVerdict(
         approved=True,
         reject_reason=None,
@@ -174,4 +190,6 @@ def evaluate(signal: Signal, ctx: RiskContext, config: RiskConfig) -> RiskVerdic
         runner_pct=config.runner_pct if config.runner_pct > 0 else None,
         runner_tp_pct=config.runner_tp_pct if config.runner_tp_pct > 0 else None,
         leverage=leverage,
+        margin_leverage=margin_leverage,
+        margin_quote=round(margin_quote, 2),
     )

@@ -32,6 +32,7 @@ def _ctx(**overrides: object) -> RiskContext:
         "kill_switch_active": False,
         "asset_in_cooldown": False,
         "open_position_on_asset": False,
+        "free_capital_quote": 1000.0,
     }
     base.update(overrides)
     return RiskContext(**base)  # type: ignore[arg-type]

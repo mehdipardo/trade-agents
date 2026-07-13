@@ -29,6 +29,13 @@ async def risk_node(state: TradingState) -> dict[str, Any]:
     store = get_store()
 
     asset = signal.asset or ""
+    # Free capital = equity + realized PnL - margin already locked by open
+    # positions. Leverage keeps this from being exhausted, so multiple triggers
+    # can run concurrently.
+    equity = settings.starting_equity_quote + (await store.performance())["realized_total"]
+    margin_locked = sum(
+        float(p.get("margin_quote") or 0.0) for p in await store.open_positions()
+    )
     ctx = RiskContext(
         equity_quote=settings.starting_equity_quote,
         trades_last_hour=await store.trades_last_hour(),
@@ -36,6 +43,7 @@ async def risk_node(state: TradingState) -> dict[str, Any]:
         kill_switch_active=await store.get_kill_switch(),
         asset_in_cooldown=await store.in_cooldown(asset),
         open_position_on_asset=await store.has_open_position(asset),
+        free_capital_quote=max(0.0, equity - margin_locked),
     )
 
     # Latch the kill switch on a daily-loss breach so it persists until reset.

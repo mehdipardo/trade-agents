@@ -41,6 +41,7 @@ def make_ctx(
     kill_switch_active: bool = False,
     asset_in_cooldown: bool = False,
     open_position_on_asset: bool = False,
+    free_capital_quote: float | None = None,
 ) -> RiskContext:
     return RiskContext(
         equity_quote=equity_quote,
@@ -49,6 +50,8 @@ def make_ctx(
         kill_switch_active=kill_switch_active,
         asset_in_cooldown=asset_in_cooldown,
         open_position_on_asset=open_position_on_asset,
+        # Default to plenty of free capital so sizing tests aren't margin-gated.
+        free_capital_quote=equity_quote if free_capital_quote is None else free_capital_quote,
     )
 
 
@@ -92,6 +95,25 @@ def test_high_impact_scales_risk_not_stop() -> None:
     assert boosted.leverage == 3
     assert boosted.stop_loss_pct == base.stop_loss_pct  # SL % unchanged
     assert boosted.position_size_quote == pytest.approx(base.position_size_quote * 3, abs=0.1)
+
+
+def test_margin_uses_leverage_and_frees_capital() -> None:
+    # 5x leverage: a $667 notional locks only ~$133 margin.
+    cfg = RiskConfig(risk_per_trade_pct=0.01, stop_loss_pct=1.5, margin_leverage=5)
+    v = evaluate(make_signal(), make_ctx(equity_quote=1000.0), cfg)
+    assert v.approved
+    assert v.margin_leverage == 5
+    assert v.margin_quote == pytest.approx(v.position_size_quote / 5, abs=0.02)
+    # SL loss is unchanged by leverage (still 1% of equity).
+    assert v.position_size_quote * (v.stop_loss_pct / 100) == pytest.approx(10.0, abs=0.02)
+
+
+def test_rejects_when_free_margin_insufficient() -> None:
+    cfg = RiskConfig(risk_per_trade_pct=0.01, stop_loss_pct=1.5, margin_leverage=5)
+    # Only $10 free: the ~$133 margin required cannot be met.
+    v = evaluate(make_signal(), make_ctx(equity_quote=1000.0, free_capital_quote=10.0), cfg)
+    assert not v.approved
+    assert "free margin" in (v.reject_reason or "")
 
 
 def test_bear_opens_short() -> None:

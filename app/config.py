@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     risk_per_trade_pct: float = Field(default=0.01, gt=0, le=0.2)
     # Hard ceiling on notional as a multiple of equity (futures leverage cap).
     max_gross_exposure: float = Field(default=3.0, gt=0)
+    # Margin leverage: margin locked per position = notional / margin_leverage.
+    # Higher leverage frees capital for more concurrent triggers; it does NOT
+    # change the SL/TP value (those scale with notional, not margin).
+    margin_leverage: int = Field(default=5, ge=1, le=50)
     max_notional_abs: float = Field(default=100.0, gt=0)  # legacy display only
     max_notional_equity_pct: float = Field(default=0.05, gt=0, le=1)
     stop_loss_pct: float = Field(default=1.5, gt=0)

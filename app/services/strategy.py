@@ -34,6 +34,9 @@ class Strategy:
     cooldown_s: int
     # Notional ceiling as a multiple of equity (futures leverage cap).
     max_gross_exposure: float = 3.0
+    # Margin leverage: margin locked = notional / margin_leverage. Frees capital
+    # for other triggers; SL/TP value is unchanged (they scale with notional).
+    margin_leverage: int = 5
     # Runner mechanism: close (1 - runner_pct) at TP, keep runner_pct with SL
     # moved to breakeven, aiming at runner_tp_pct.
     runner_pct: float = 0.0
@@ -59,6 +62,7 @@ STRATEGIES: dict[str, Strategy] = {
         max_trades_per_hour=3,
         cooldown_s=1800,
         max_gross_exposure=2.0,
+        margin_leverage=3,
     ),
     "balanced": Strategy(
         id="balanced",
@@ -74,6 +78,7 @@ STRATEGIES: dict[str, Strategy] = {
         max_trades_per_hour=6,
         cooldown_s=900,
         max_gross_exposure=3.0,
+        margin_leverage=5,
         runner_pct=0.20,
         runner_tp_pct=50.0,
         high_impact_threshold=8,
@@ -93,6 +98,7 @@ STRATEGIES: dict[str, Strategy] = {
         max_trades_per_hour=10,
         cooldown_s=300,
         max_gross_exposure=5.0,
+        margin_leverage=10,
         runner_pct=0.25,
         runner_tp_pct=80.0,
         high_impact_threshold=8,
@@ -111,6 +117,7 @@ STRATEGIES: dict[str, Strategy] = {
         max_trades_per_hour=15,
         cooldown_s=120,
         max_gross_exposure=3.0,
+        margin_leverage=10,
     ),
 }
 

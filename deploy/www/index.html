@@ -217,7 +217,7 @@
       <div class="stat">
         <div class="label">Open positions</div>
         <div class="value" id="mOpen">—</div>
-        <div class="sub"><span class="mono muted">Exposure </span><span class="mono" id="mExposure">—</span></div>
+        <div class="sub"><span class="mono muted">Free </span><span class="mono up" id="mFree">—</span><span class="dim">·</span><span class="mono muted">margin </span><span class="mono" id="mMargin">—</span></div>
       </div>
       <div class="stat">
         <div class="label">Win rate</div>
@@ -366,7 +366,9 @@ async function loadPerformance(){
     $('#mCumAbs').textContent=(abs>=0?'+':'')+fmtUsd(abs);$('#mCumAbs').className='mono '+clsP(abs);
     const dp=p.daily_pnl||0;
     $('#mDaily').textContent=(dp>=0?'+':'')+fmtUsd(dp);$('#mDaily').className='value '+clsP(dp);
-    $('#mOpen').textContent=p.open_positions;$('#mExposure').textContent=fmtUsd(p.exposure);
+    $('#mOpen').textContent=p.open_positions;
+    $('#mFree').textContent=fmtUsd(p.free_capital!=null?p.free_capital:p.equity);
+    $('#mMargin').textContent=fmtUsd(p.margin_used||0);
     $('#posCount').textContent=p.open_positions;$('#posExposure').textContent=fmtUsd(p.exposure);
     $('#mWinRate').textContent=p.closed_trades?Math.round(p.win_rate*100)+'%':'—';
     $('#mClosed').textContent=(p.closed_trades||0)+' closed';
@@ -381,15 +383,18 @@ function renderPositions(list){
     const long=p.side==='buy',runner=p.phase==='runner';
     const tags=[
       runner?'<span class="badge runner">Runner</span>':'',
-      (p.leverage>1)?`<span class="badge lev">x${p.leverage}</span>`:'',
+      (p.margin_leverage>1)?`<span class="badge lev">${p.margin_leverage}× lev</span>`:'',
+      (p.leverage>1)?`<span class="badge impact">boost x${p.leverage}</span>`:'',
       (p.impact_score!=null)?`<span class="badge impact">i${p.impact_score}</span>`:'',
     ].join(' ');
     const sl=runner?p.entry_price:p.stop_loss_price, tp=runner?p.runner_tp_price:p.take_profit_price;
+    const notional=p.notional_quote!=null?p.notional_quote:Math.abs((p.entry_price||0)*(p.amount||0));
+    const size=`${fmtUsd(notional)}<br><span class="dim" style="font-size:10px">margin ${fmtUsd(p.margin_quote||0)}</span>`;
     const tr=el('tr',null,
       `<td><b>${p.symbol||p.asset||'—'}</b></td>
        <td><span class="badge ${long?'long':'short'}">${long?'LONG':'SHORT'}</span></td>
        <td>${num(p.entry_price)}</td><td>${num(sl)}</td><td>${num(tp)}</td>
-       <td>${fmtUsd(Math.abs((p.entry_price||0)*(p.amount||0)))}</td>
+       <td>${size}</td>
        <td>${tags||'—'}</td>
        <td style="text-align:right"></td>`);
     const btn=el('button','btn mini','Close');
