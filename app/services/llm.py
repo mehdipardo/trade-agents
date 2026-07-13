@@ -57,7 +57,8 @@ _BEAR_KEYWORDS = (
     "sold", "dump", "offload", "liquidat", "outflow", "plunge",
     # Geopolitical risk-off: military escalation drives risk assets down.
     "war", "attack", "strike", "bomb", "missile", "invasion", "escalat",
-    "retaliat", "nuclear", "shoot",
+    "retaliat", "nuclear", "shoot", "explosion", "airstrike", "drone",
+    "warhead", "troops", "military",
 )
 
 # A de-escalation word (ceasefire/truce/peace) combined with a negator means the
@@ -126,7 +127,8 @@ _MACRO_KEYWORDS = (
     # Geopolitical / political figures whose statements routinely move markets.
     "trump", "war", "iran", "attack", "military", "strike", "missile", "bomb",
     "invasion", "conflict", "nuclear", "geopolit", "escalat", "ceasefire",
-    "peace deal", "retaliat",
+    "peace deal", "retaliat", "explosion", "airstrike", "drone", "gulf",
+    "hormuz", "israel", "russia", "ukraine",
     # TradFi assets (perpetuals available on MEXC).
     "gold", "xau", "silver", "oil", "crude", "wti", "brent", "spx", "sp500",
     "tesla", "musk", "nvidia", "apple", "iphone", "microsoft", "meta",
