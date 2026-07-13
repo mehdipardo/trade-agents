@@ -50,10 +50,12 @@ def test_rss_source_falls_back_to_default_feeds() -> None:
     _close(coro)
 
 
-def test_three_heterogeneous_sources_enabled_by_default() -> None:
+def test_default_sources_are_the_free_working_ones() -> None:
     from app.sources import catalog
 
     catalog.reset_state()
     enabled = {s.id for s in catalog.list_specs() if catalog.is_enabled(s.id)}
-    # Crypto firehose + macro calendar + broad world/markets RSS = 3 markets.
-    assert enabled == {"news_aggregator", "econ_calendar", "crypto_news_rss"}
+    # RSS firehose (crypto+markets+world) + macro calendar. The paid SSE
+    # aggregator is OFF by default (its free endpoint went 402).
+    assert enabled == {"econ_calendar", "crypto_news_rss"}
+    assert not catalog.is_enabled("news_aggregator")

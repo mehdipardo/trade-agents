@@ -25,10 +25,15 @@ log = get_logger("app.ingestion.rss")
 # as the default when no RSS_FEEDS override is configured. Dead feeds degrade
 # gracefully (one bad feed never stops the loop).
 DEFAULT_RSS_FEEDS: tuple[str, ...] = (
-    "https://feeds.bbci.co.uk/news/world/rss.xml",       # world / geopolitics
-    "https://feeds.bbci.co.uk/news/business/rss.xml",    # business / markets
-    "https://www.cnbc.com/id/100003114/device/rss/rss.html",  # CNBC top news
-    "https://feeds.bbci.co.uk/news/technology/rss.xml",  # tech / big-cap stocks
+    # Crypto (the free SSE aggregator went paywalled; these cover the space).
+    "https://cointelegraph.com/rss",
+    "https://decrypt.co/feed",
+    "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    # Business / markets (TradFi).
+    "https://feeds.bbci.co.uk/news/business/rss.xml",
+    "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+    # World / geopolitics (catches the Trump/Iran class of story).
+    "https://feeds.bbci.co.uk/news/world/rss.xml",
 )
 
 

@@ -54,18 +54,28 @@ class SourceSpec:
 CATALOG: tuple[SourceSpec, ...] = (
     SourceSpec(
         id="news_aggregator",
-        name="Real-time news aggregator (200+ outlets)",
+        name="SSE news aggregator (optional, paid)",
         kind="news",
         description=(
-            "Single firehose fanning in 200+ outlets (Bloomberg, Reuters, CoinDesk, "
-            "The Block…) via SSE. The LLM funnel triages impact + long/short-ability."
+            "Single low-latency SSE firehose fanning in 200+ outlets. The former "
+            "free endpoint (cryptocurrency.cv) went paywalled (HTTP 402), so this "
+            "is OFF by default — paste a working SSE URL below to re-enable it. "
+            "Crypto + world coverage is otherwise provided by the RSS source."
         ),
-        cost="free",
-        reactivity="~minutes (RSS-based, SSE stream)",
-        default_enabled=True,
-        notes="free-crypto-news (cryptocurrency.cv), no API key. Broad coverage; "
-        "for sub-second entries add a paid low-latency feed later.",
-        tags=("news", "broad", "recommended"),
+        cost="freemium",
+        reactivity="~seconds (SSE stream)",
+        default_enabled=False,
+        notes="Set an SSE endpoint that emits JSON news items to turn this on.",
+        tags=("news", "broad"),
+        config_fields=(
+            ConfigField(
+                name="aggregator_sse_url",
+                label="SSE endpoint URL",
+                placeholder="https://your-provider.example/api/sse",
+                required=True,
+                help="Any SSE stream of JSON news items {title, description, link, pubDate}.",
+            ),
+        ),
     ),
     SourceSpec(
         id="econ_calendar",
@@ -130,19 +140,19 @@ CATALOG: tuple[SourceSpec, ...] = (
     ),
     SourceSpec(
         id="crypto_news_rss",
-        name="World & markets news (RSS)",
+        name="Crypto · markets · world news (RSS)",
         kind="news",
         description=(
-            "Broad RSS across world/geopolitics + business/markets (BBC, CNBC…). "
-            "Complements the crypto firehose so TradFi and geopolitical stories "
-            "(the Trump/Iran class of event) are covered too."
+            "The primary firehose: crypto (CoinTelegraph, Decrypt, CoinDesk) + "
+            "business/markets (BBC, CNBC) + world/geopolitics (BBC World). Only "
+            "items published after startup flow through; the LLM triages impact."
         ),
         cost="free",
         reactivity="minutes (poll)",
         default_enabled=True,
         notes="Ships with a curated default feed set; override the list below "
         "with any comma-separated public RSS endpoints.",
-        tags=("news", "broad", "tradfi", "geopolitics"),
+        tags=("news", "broad", "crypto", "tradfi", "geopolitics", "recommended"),
         config_fields=(
             ConfigField(
                 name="rss_feeds",
