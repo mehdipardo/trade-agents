@@ -128,22 +128,22 @@ async def _merged_settings(source_id: str) -> MergedSettings:
 def _news_aggregator(
     queue: asyncio.Queue[NewsEvent], settings: MergedSettings
 ) -> Coroutine[Any, Any, None] | None:
-    url = getattr(settings, "aggregator_sse_url", "")
-    if not url:
-        return None
-    from app.sources.aggregator import stream_loop
+    from app.sources.aggregator import DEFAULT_SSE_URL, stream_loop
 
+    # Free, no-key, default-enabled source: fall back to the built-in URL so it
+    # always runs out of the box even when the env var is unset.
+    url = getattr(settings, "aggregator_sse_url", "") or DEFAULT_SSE_URL
     return stream_loop(queue, url)
 
 
 def _econ_calendar(
     queue: asyncio.Queue[NewsEvent], settings: MergedSettings
 ) -> Coroutine[Any, Any, None] | None:
-    url = getattr(settings, "econ_calendar_url", "")
-    if not url:
-        return None
+    from app.sources.economic_calendar import DEFAULT_CALENDAR_URL
     from app.sources.watcher import watcher_loop
 
+    # Free, no-key, default-enabled source: fall back to the built-in feed.
+    url = getattr(settings, "econ_calendar_url", "") or DEFAULT_CALENDAR_URL
     return watcher_loop(queue, url)
 
 
