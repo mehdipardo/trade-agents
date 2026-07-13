@@ -149,6 +149,9 @@ async def _finalize_close(
     fee = round_trip_fee(entry, exit_price, amount_closed, fee_pct)
     pnl = realized_pnl(side, entry, exit_price, amount_closed) - fee
     await store.add_daily_pnl(pnl)
+    # A full close counts as one closed trade for win-rate; a partial (TP1) only
+    # contributes its realized PnL to the lifetime total.
+    await store.bump_realized(pnl, closed=is_full_close, win=pnl > 0)
 
     if is_full_close:
         await store.set_position(symbol, is_open=False)
@@ -287,6 +290,7 @@ async def close_position_manually(symbol: str) -> dict[str, Any] | None:
     fee = round_trip_fee(entry, price, amount, get_settings().taker_fee_pct)
     pnl = realized_pnl(position["side"], entry, price, amount) - fee
     await store.add_daily_pnl(pnl)
+    await store.bump_realized(pnl, closed=True, win=pnl > 0)
     await store.set_position(symbol, is_open=False)
     log.info(
         "position_closed_manually",

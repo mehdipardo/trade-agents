@@ -58,6 +58,39 @@ async def positions() -> dict[str, object]:
     return {"positions": await store.open_positions(), "state": await store.snapshot()}
 
 
+@router.get("/performance")
+async def performance() -> dict[str, object]:
+    """Equity / return / win-rate hero metrics for live paper trading.
+
+    Equity = starting equity + lifetime realized PnL (net of fees). Unrealized
+    PnL is omitted in offline mode (no live mark price). Backtest trades are NOT
+    included here — they have their own labeled report at /api/backtest.
+    """
+    settings = get_settings()
+    store = get_store()
+    perf = await store.performance()
+    snap = await store.snapshot()
+    positions_open = await store.open_positions()
+    start = settings.starting_equity_quote
+    realized = perf["realized_total"]
+    exposure = sum(
+        float(p.get("entry_price", 0)) * float(p.get("amount", 0)) for p in positions_open
+    )
+    closed = perf["closed_trades"]
+    return {
+        "starting_equity": start,
+        "equity": round(start + realized, 2),
+        "realized_total": realized,
+        "return_pct": round(realized / start * 100, 3) if start else 0.0,
+        "daily_pnl": snap.get("daily_pnl", 0.0),
+        "open_positions": len(positions_open),
+        "exposure": round(exposure, 2),
+        "closed_trades": closed,
+        "wins": perf["wins"],
+        "win_rate": round(perf["wins"] / closed, 3) if closed else 0.0,
+    }
+
+
 @router.get("/strategies")
 async def strategies() -> dict[str, object]:
     """List every available strategy plus the id of the active one."""

@@ -58,6 +58,10 @@ class Store(Protocol):
     async def daily_pnl(self) -> float: ...
     async def add_daily_pnl(self, delta: float) -> None: ...
 
+    # Lifetime realized performance (for the equity / win-rate hero metrics)
+    async def bump_realized(self, net_pnl: float, *, closed: bool, win: bool) -> None: ...
+    async def performance(self) -> dict: ...
+
     # Dedup
     async def seen_before(self, key: str, ttl_s: int) -> bool: ...
 
@@ -87,6 +91,9 @@ class InMemoryStore:
         self._critiques: list[dict] = []  # SL post-mortems (bounded)
         self._strategy_id: str | None = None
         self._source_configs: dict[str, dict[str, str]] = {}
+        self._realized_total = 0.0  # lifetime realized PnL (net of fees)
+        self._closed_count = 0
+        self._wins = 0
 
     async def connect(self) -> None:
         log.info("store_backend", backend="in-memory")
@@ -158,6 +165,20 @@ class InMemoryStore:
     async def add_daily_pnl(self, delta: float) -> None:
         day = _utc_day()
         self._pnl[day] = self._pnl.get(day, 0.0) + delta
+
+    async def bump_realized(self, net_pnl: float, *, closed: bool, win: bool) -> None:
+        self._realized_total += net_pnl
+        if closed:
+            self._closed_count += 1
+            if win:
+                self._wins += 1
+
+    async def performance(self) -> dict:
+        return {
+            "realized_total": round(self._realized_total, 4),
+            "closed_trades": self._closed_count,
+            "wins": self._wins,
+        }
 
     async def seen_before(self, key: str, ttl_s: int) -> bool:
         now = time.time()
@@ -285,6 +306,23 @@ class RedisStore:
         key = f"fst:pnl:{_utc_day()}"
         await self._r.incrbyfloat(key, delta)
         await self._r.expire(key, 2 * 24 * _HOUR_S)
+
+    async def bump_realized(self, net_pnl: float, *, closed: bool, win: bool) -> None:
+        await self._r.incrbyfloat("fst:realized_total", net_pnl)
+        if closed:
+            await self._r.incr("fst:closed_count")
+            if win:
+                await self._r.incr("fst:wins")
+
+    async def performance(self) -> dict:
+        total = await self._r.get("fst:realized_total")
+        closed = await self._r.get("fst:closed_count")
+        wins = await self._r.get("fst:wins")
+        return {
+            "realized_total": round(float(total), 4) if total else 0.0,
+            "closed_trades": int(closed) if closed else 0,
+            "wins": int(wins) if wins else 0,
+        }
 
     async def seen_before(self, key: str, ttl_s: int) -> bool:
         # SETNX-with-TTL: returns True if the key already existed.
