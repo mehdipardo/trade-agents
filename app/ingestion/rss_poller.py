@@ -44,6 +44,12 @@ def parse_entry(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _entry_id(entry: dict[str, Any]) -> str:
+    return str(
+        entry.get("id") or entry.get("guid") or entry.get("link") or entry.get("title") or ""
+    )
+
+
 def _poll_feed_sync(url: str, cache: dict[str, tuple[str | None, str | None]]) -> list[NewsEvent]:
     """Blocking single-feed poll (run in a thread). Updates the etag cache."""
     import feedparser  # lazy import
@@ -65,28 +71,55 @@ def _poll_feed_sync(url: str, cache: dict[str, tuple[str | None, str | None]]) -
     return events
 
 
+def _poll_ids_sync(url: str) -> set[str]:
+    """Return the entry ids currently in a feed (used to prime the seen-set)."""
+    import feedparser
+
+    parsed = feedparser.parse(url)
+    return {_entry_id(e) for e in parsed.entries if _entry_id(e)}
+
+
 async def rss_poller_loop(
     queue: asyncio.Queue[NewsEvent], feeds: list[str], interval_s: int
 ) -> None:
-    """Poll all feeds forever, queueing new entries."""
+    """Poll all feeds forever, queueing only entries that appear after startup.
+
+    The initial backlog is primed into a per-feed seen-set and NOT emitted, so a
+    fresh start doesn't replay a day of old headlines through the pipeline.
+    """
     if not feeds:
         return
     log.info("rss_poller_started", feeds=len(feeds), interval_s=interval_s)
     cache: dict[str, tuple[str | None, str | None]] = {}
+    seen: dict[str, set[str]] = {}
+
+    # Prime: record the current backlog per feed without emitting anything.
+    for url in feeds:
+        try:
+            seen[url] = await asyncio.to_thread(_poll_ids_sync, url)
+        except Exception as exc:  # noqa: BLE001 - a bad feed just starts empty
+            log.warning("rss_feed_error", url=url, error=str(exc))
+            seen[url] = set()
+    log.info("rss_poller_primed", feeds=len(feeds))
+
     try:
         while True:
+            await asyncio.sleep(interval_s)
             for url in feeds:
                 try:
                     events = await asyncio.to_thread(_poll_feed_sync, url, cache)
                 except Exception as exc:  # noqa: BLE001 - one bad feed never stops the loop
                     log.warning("rss_feed_error", url=url, error=str(exc))
                     continue
+                feed_seen = seen.setdefault(url, set())
                 for event in events:
+                    if event.id in feed_seen:
+                        continue  # already emitted (or part of the primed backlog)
+                    feed_seen.add(event.id)
                     try:
                         queue.put_nowait(event)
                     except asyncio.QueueFull:
                         log.warning("rss_queue_full", dropped=event.id)
-            await asyncio.sleep(interval_s)
     except asyncio.CancelledError:
         log.info("rss_poller_stopped")
         raise
