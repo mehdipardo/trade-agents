@@ -133,23 +133,6 @@ async def close_position(body: ClosePositionRequest) -> dict[str, Any]:
     return result
 
 
-@router.post("/backtest/replay")
-async def backtest_replay() -> dict[str, Any]:
-    """Replay the curated backtest set through analyst+risk, net of fees.
-
-    Records the trades into history tagged mode="backtest" (always
-    distinguishable from live paper trades) and returns the report.
-    """
-    from app.services.backtest import run_backtest
-
-    report = await run_backtest(record=True)
-    log.info(
-        "backtest_replayed",
-        trades_taken=report["trades_taken"], net_pnl=report["net_pnl_quote"],
-    )
-    return report
-
-
 @router.post("/strategy")
 async def set_strategy(body: StrategyRequest) -> dict[str, Any]:
     """Switch the active strategy (SL/TP, sizing, gates applied from next event)."""

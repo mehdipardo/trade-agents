@@ -269,14 +269,6 @@
         </div>
 
         <div class="card">
-          <header>
-            <h3>Backtest</h3><span class="chip violet">Illustrative</span>
-            <div class="spacer"></div><button class="btn mini" id="btRun">Run</button>
-          </header>
-          <div class="bt-grid" id="backtest"><div class="empty" style="grid-column:1/-1">Representative past events replayed through the live engine, net of fees — not live trades. Click Run.</div></div>
-        </div>
-
-        <div class="card">
           <header><h3>Signals</h3><span class="h-sub">recent</span></header>
           <div class="body p0" id="signalList"></div>
         </div>
@@ -433,10 +425,9 @@ async function loadStrategies(){
 /* ---- Signals / Orders ---- */
 const SENT={BULL:'up',BEAR:'down',NEUTRAL:''};
 function signalRow(h){
-  const bt=h.mode==='backtest'?'<span class="badge bt">BT</span> ':'';
   return `<div class="list-row">
     <span class="t">${(h.asset||'—')}</span>
-    <span class="m">${bt}<b class="${SENT[h.sentiment]||''}">${h.sentiment||'—'}</b> · ${(h.title||'').slice(0,42)}</span>
+    <span class="m"><b class="${SENT[h.sentiment]||''}">${h.sentiment||'—'}</b> · ${(h.title||'').slice(0,42)}</span>
     <span class="chip ${SENT[h.sentiment]||''}">${((h.confidence||0)*100).toFixed(0)}%</span>
   </div>`;
 }
@@ -466,21 +457,6 @@ async function loadCritiques(){
   }catch(e){}
 }
 
-/* ---- Backtest ---- */
-function renderBacktest(r){
-  const c=$('#backtest');
-  if(!r){c.innerHTML='<div class="empty" style="grid-column:1/-1">Representative past events replayed through the live engine, net of fees — not live trades. Click Run.</div>';return;}
-  const net=r.net_pnl_quote||0;
-  const tile=(l,v,cls)=>`<div class="bt-tile"><div class="label">${l}</div><div class="v ${cls||''}">${v}</div></div>`;
-  c.innerHTML=
-    tile('Net P&L',`${net>=0?'+':''}${net.toFixed(2)}`,clsP(net))+
-    tile('Return',fmtPct(r.return_pct||0),clsP(r.return_pct))+
-    tile('Win rate',`${((r.win_rate||0)*100).toFixed(0)}%`)+
-    tile('Trades',`${r.trades_taken||0}/${r.events||0}`)+
-    tile('Fees',`$${(r.total_fees_quote||0).toFixed(2)}`);
-}
-async function loadBacktest(){try{const {report}=await api('/api/backtest');renderBacktest(report);}catch(e){}}
-
 /* ---- Groq LLM usage tracker ---- */
 async function loadLlmUsage(){
   try{const u=await api('/api/llm-usage');
@@ -489,9 +465,6 @@ async function loadLlmUsage(){
     $('#llmChip').title=`Groq ${u.provider} · ${u.calls_total} calls total · ${u.total_tokens.toLocaleString()} tokens · est $${u.est_cost_usd}`;
   }catch(e){}
 }
-$('#btRun').onclick=async()=>{const b=$('#btRun');b.disabled=true;b.textContent='Running…';
-  try{const r=await api('/admin/backtest/replay',{});renderBacktest(r);loadSignals();}catch(e){}finally{b.disabled=false;b.textContent='Run';}};
-
 /* ---- Sources & Calendar ---- */
 function srcStatus(s){
   if(s.running)return '<span class="chip up">running</span>';
@@ -589,7 +562,7 @@ function connectWs(){
 /* ---- Boot ---- */
 async function hydrate(){
   try{const h=await api('/api/health');$('#healthDot').className='dot ok';$('#modeChip').textContent=`${h.exchange_id} · ${h.llm_provider}`;}catch(e){$('#healthDot').className='dot';}
-  loadPerformance();refreshState();loadStrategies();loadSignals();loadOrders();loadCritiques();loadBacktest();loadLlmUsage();
+  loadPerformance();refreshState();loadStrategies();loadSignals();loadOrders();loadCritiques();loadLlmUsage();
 }
 setChart('BTC/USDT');showScanner();connectWs();
 setInterval(()=>{refreshState();loadPerformance();loadLlmUsage();},5000);

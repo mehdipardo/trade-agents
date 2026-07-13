@@ -63,8 +63,7 @@ async def performance() -> dict[str, object]:
     """Equity / return / win-rate hero metrics for live paper trading.
 
     Equity = starting equity + lifetime realized PnL (net of fees). Unrealized
-    PnL is omitted in offline mode (no live mark price). Backtest trades are NOT
-    included here — they have their own labeled report at /api/backtest.
+    PnL is omitted in offline mode (no live mark price).
     """
     settings = get_settings()
     store = get_store()
@@ -108,14 +107,6 @@ async def strategies() -> dict[str, object]:
 async def critiques(limit: int = 20) -> dict[str, list[dict]]:
     """LLM post-mortems of the most recent stop-loss hits."""
     return {"critiques": await get_store().critiques(limit)}
-
-
-@router.get("/backtest")
-async def backtest() -> dict[str, object]:
-    """The last illustrative backtest report (empty until one is run)."""
-    from app.services.backtest import get_last_report
-
-    return {"report": get_last_report()}
 
 
 # Groq llama-3.3-70b pricing (USD per 1M tokens) for a rough cost estimate.
