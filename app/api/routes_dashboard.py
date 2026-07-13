@@ -70,3 +70,11 @@ async def strategies() -> dict[str, object]:
 async def critiques(limit: int = 20) -> dict[str, list[dict]]:
     """LLM post-mortems of the most recent stop-loss hits."""
     return {"critiques": await get_store().critiques(limit)}
+
+
+@router.get("/backtest")
+async def backtest() -> dict[str, object]:
+    """The last illustrative backtest report (empty until one is run)."""
+    from app.services.backtest import get_last_report
+
+    return {"report": get_last_report()}

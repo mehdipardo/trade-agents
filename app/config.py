@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     daily_loss_limit_pct: float = Field(default=0.03, gt=0, le=1)
     # Paper equity used until the exchange provides a real balance (Étape 5).
     starting_equity_quote: float = Field(default=1000.0, gt=0)
+    # Trading fees as a percent of notional, charged per fill. Market orders are
+    # takers. Defaults reflect MEXC USDT-M futures (low). Round trip = 2x taker.
+    taker_fee_pct: float = Field(default=0.02, ge=0)
+    maker_fee_pct: float = Field(default=0.0, ge=0)
 
     # --- Integrations ----------------------------------------------------
     slack_webhook_url: str = ""

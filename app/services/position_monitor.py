@@ -57,10 +57,30 @@ def sl_tp_prices(
 
 
 def realized_pnl(side: str, entry_price: float, exit_price: float, amount: float) -> float:
-    """Realized quote PnL for closing a position."""
+    """Gross realized quote PnL for closing a position (before fees)."""
     if side == "buy":
         return (exit_price - entry_price) * amount
     return (entry_price - exit_price) * amount
+
+
+def round_trip_fee(
+    entry_price: float, exit_price: float, amount: float, fee_pct: float
+) -> float:
+    """Total taker fee (quote) charged on both the entry and the exit fill.
+
+    Fees are a percent of NOTIONAL (price x amount) on each side, so a round
+    trip costs entry_notional*fee + exit_notional*fee.
+    """
+    rate = fee_pct / 100.0
+    return (entry_price * amount + exit_price * amount) * rate
+
+
+def net_realized_pnl(
+    side: str, entry_price: float, exit_price: float, amount: float, fee_pct: float
+) -> float:
+    """Realized quote PnL net of round-trip taker fees."""
+    gross = realized_pnl(side, entry_price, exit_price, amount)
+    return gross - round_trip_fee(entry_price, exit_price, amount, fee_pct)
 
 
 def runner_exit_reason(
@@ -119,11 +139,15 @@ async def _finalize_close(
     amount_closed: float,
     is_full_close: bool,
 ) -> None:
-    """Book PnL, update the store, and fire the LLM critique on any SL hit."""
+    """Book PnL (net of fees), update the store, fire the LLM critique on SL."""
+    from app.config import get_settings
+
     store = get_store()
     side = position["side"]
     entry = float(position["entry_price"])
-    pnl = realized_pnl(side, entry, exit_price, amount_closed)
+    fee_pct = get_settings().taker_fee_pct
+    fee = round_trip_fee(entry, exit_price, amount_closed, fee_pct)
+    pnl = realized_pnl(side, entry, exit_price, amount_closed) - fee
     await store.add_daily_pnl(pnl)
 
     if is_full_close:
@@ -136,6 +160,7 @@ async def _finalize_close(
         entry_price=entry,
         exit_price=exit_price,
         amount=amount_closed,
+        fee_quote=round(fee, 4),
         pnl_quote=round(pnl, 4),
         full_close=is_full_close,
     )
@@ -256,12 +281,21 @@ async def close_position_manually(symbol: str) -> dict[str, Any] | None:
     close_side = "sell" if position["side"] == "buy" else "buy"
     if not await _close_market(symbol, close_side, amount, f"manual-{symbol}"):
         return None
+    from app.config import get_settings
+
     entry = float(position["entry_price"])
-    pnl = realized_pnl(position["side"], entry, price, amount)
+    fee = round_trip_fee(entry, price, amount, get_settings().taker_fee_pct)
+    pnl = realized_pnl(position["side"], entry, price, amount) - fee
     await store.add_daily_pnl(pnl)
     await store.set_position(symbol, is_open=False)
-    log.info("position_closed_manually", symbol=symbol, exit_price=price, pnl_quote=round(pnl, 4))
-    return {"symbol": symbol, "exit_price": price, "pnl_quote": round(pnl, 4)}
+    log.info(
+        "position_closed_manually",
+        symbol=symbol, exit_price=price, fee_quote=round(fee, 4), pnl_quote=round(pnl, 4),
+    )
+    return {
+        "symbol": symbol, "exit_price": price,
+        "fee_quote": round(fee, 4), "pnl_quote": round(pnl, 4),
+    }
 
 
 async def position_monitor_loop(poll_interval_s: float = 2.0) -> None:

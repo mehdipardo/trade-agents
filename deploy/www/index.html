@@ -160,6 +160,17 @@
     </div>
 
     <div class="card pad" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="label">Backtest</span>
+        <span class="pill imp">ILLUSTRATIVE</span>
+        <span class="muted" style="font-size:12px">representative past events replayed through the live engine, net of fees — not live trades</span>
+        <span class="grow"></span>
+        <button class="btn" id="bt-run">Run backtest</button>
+      </div>
+      <div id="backtest" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card pad" style="margin-bottom:14px">
       <div class="tv-label">
         <span class="label">Live chart</span>
         <span class="sym" id="tv-sym">BTC/USDT</span>
@@ -311,6 +322,30 @@ function renderCritiques(list){
   });
 }
 async function loadCritiques(){try{const {critiques}=await api("/api/critiques");renderCritiques(critiques);}catch(e){}}
+
+function renderBacktest(r){
+  const c=$("#backtest");c.innerHTML="";
+  if(!r){c.appendChild(el("div","empty","No backtest yet — click “Run backtest” to seed illustrative history."));return;}
+  const net=r.net_pnl_quote||0,pos=net>=0;
+  const grid=el("div","grid");grid.style.gridTemplateColumns="repeat(auto-fit,minmax(120px,1fr))";
+  const tile=(label,val,cls)=>{const d=el("div","card pad");d.style.padding="10px 12px";
+    d.innerHTML=`<div class="label">${label}</div><div class="num" style="font-size:18px;font-weight:700" class="${cls||''}">${val}</div>`;return d;};
+  grid.appendChild(tile("Net P&L",`${pos?"+":""}${net.toFixed(2)} USDT`));
+  grid.appendChild(tile("Return",`${pos?"+":""}${(r.return_pct||0).toFixed(2)}%`));
+  grid.appendChild(tile("Win rate",`${((r.win_rate||0)*100).toFixed(0)}%`));
+  grid.appendChild(tile("Trades",`${r.trades_taken||0}/${r.events||0}`));
+  grid.appendChild(tile("Fees paid",`${(r.total_fees_quote||0).toFixed(2)} USDT`));
+  c.appendChild(grid);
+}
+async function loadBacktest(){try{const {report}=await api("/api/backtest");renderBacktest(report);}catch(e){}}
+$("#bt-run").onclick=async()=>{
+  const b=$("#bt-run");b.disabled=true;b.textContent="Running…";
+  try{const r=await api("/admin/backtest/replay",{});renderBacktest(r);
+    // Refresh feeds so the BT-tagged signals show up.
+    const s=await api("/api/signals");$("#signals").innerHTML="";
+    s.signals.slice(0,20).reverse().forEach(x=>prepend("#signals",signalRow(x)));
+  }catch(e){}finally{b.disabled=false;b.textContent="Run backtest";}
+};
 function renderRisk(state){
   const c=$("#risk");c.innerHTML="";
   const pct=Math.min(100,(state.trades_last_hour/6)*100);
@@ -328,6 +363,7 @@ function signalRow(h){
   row.appendChild(el("span",null,emojiOf(h.status)));
   row.appendChild(el("span",sc,`<b>${h.sentiment||"—"}</b>`));
   row.appendChild(el("span","num muted",h.asset||"—"));
+  if(h.mode==="backtest")row.appendChild(el("span","pill imp","BT"));
   row.appendChild(el("span","grow",`<span class="muted" style="font-size:12px">${(h.title||"").slice(0,54)}</span>`));
   row.appendChild(el("span","num muted",fmtPct(h.confidence)));
   return row;
@@ -469,7 +505,7 @@ async function hydrate(){
     $("#mode-chip").textContent=`${h.exchange_id} · ${h.llm_provider}`;}catch(e){$("#health-dot").className="dot off";}
   try{const s=await api("/api/signals");s.signals.slice(0,20).reverse().forEach(x=>prepend("#signals",signalRow(x)));}catch(e){}
   try{const o=await api("/api/orders");o.orders.slice(0,20).reverse().forEach(x=>prepend("#orders",orderRow(x)));}catch(e){}
-  refreshState();loadSources();loadCalendar();loadStrategies();loadCritiques();
+  refreshState();loadSources();loadCalendar();loadStrategies();loadCritiques();loadBacktest();
   try{const o=await api("/api/orders");const last=(o.orders||[])[0];
     if(last&&last.symbol)setChartAsset(last.symbol);else setChartAsset("BTC/USDT");
   }catch(e){setChartAsset("BTC/USDT");}

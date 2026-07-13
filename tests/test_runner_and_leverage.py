@@ -10,6 +10,9 @@ from app.risk.rules import RiskConfig, RiskContext, evaluate
 from app.services.critique import generate_and_store_critique
 from app.services.position_monitor import (
     exit_reason,
+    net_realized_pnl,
+    realized_pnl,
+    round_trip_fee,
     runner_exit_reason,
     sl_tp_prices,
 )
@@ -105,6 +108,25 @@ def test_runner_stop_at_entry_for_short() -> None:
     assert runner_exit_reason("sell", 100.0, 100.1, 50.0) == "runner_stop"
     assert runner_exit_reason("sell", 100.0, 51.0, 50.0) is None
     assert runner_exit_reason("sell", 100.0, 50.0, 50.0) == "runner_take_profit"
+
+
+def test_round_trip_fee_charges_both_sides() -> None:
+    # 0.02% on entry + exit notional.
+    fee = round_trip_fee(60000, 61800, 0.008, 0.02)
+    expected = (60000 * 0.008 + 61800 * 0.008) * 0.0002
+    assert fee == pytest.approx(expected)
+
+
+def test_net_pnl_is_gross_minus_fees() -> None:
+    gross = realized_pnl("buy", 60000, 61800, 0.008)
+    net = net_realized_pnl("buy", 60000, 61800, 0.008, 0.02)
+    assert net < gross
+    assert net == pytest.approx(gross - round_trip_fee(60000, 61800, 0.008, 0.02))
+
+
+def test_zero_fee_pct_leaves_pnl_untouched() -> None:
+    gross = realized_pnl("sell", 180, 175.5, 0.5)
+    assert net_realized_pnl("sell", 180, 175.5, 0.5, 0.0) == pytest.approx(gross)
 
 
 def test_main_phase_helpers_unchanged() -> None:
