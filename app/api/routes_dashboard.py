@@ -111,3 +111,19 @@ async def backtest() -> dict[str, object]:
     from app.services.backtest import get_last_report
 
     return {"report": get_last_report()}
+
+
+# Groq llama-3.3-70b pricing (USD per 1M tokens) for a rough cost estimate.
+_GROQ_IN_PER_M = 0.59
+_GROQ_OUT_PER_M = 0.79
+
+
+@router.get("/llm-usage")
+async def llm_usage() -> dict[str, object]:
+    """Groq consumption tracker: calls + tokens + a rough cost estimate."""
+    u = await get_store().llm_usage()
+    est = (
+        u["prompt_tokens"] / 1_000_000 * _GROQ_IN_PER_M
+        + u["completion_tokens"] / 1_000_000 * _GROQ_OUT_PER_M
+    )
+    return {**u, "provider": get_settings().llm_provider, "est_cost_usd": round(est, 4)}

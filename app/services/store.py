@@ -62,6 +62,10 @@ class Store(Protocol):
     async def bump_realized(self, net_pnl: float, *, closed: bool, win: bool) -> None: ...
     async def performance(self) -> dict: ...
 
+    # LLM usage tracking (Groq consumption watch)
+    async def bump_llm(self, prompt_tokens: int, completion_tokens: int) -> None: ...
+    async def llm_usage(self) -> dict: ...
+
     # Dedup
     async def seen_before(self, key: str, ttl_s: int) -> bool: ...
 
@@ -94,6 +98,10 @@ class InMemoryStore:
         self._realized_total = 0.0  # lifetime realized PnL (net of fees)
         self._closed_count = 0
         self._wins = 0
+        self._llm_calls = 0
+        self._llm_prompt_tokens = 0
+        self._llm_completion_tokens = 0
+        self._llm_calls_by_day: dict[str, int] = {}
 
     async def connect(self) -> None:
         log.info("store_backend", backend="in-memory")
@@ -178,6 +186,22 @@ class InMemoryStore:
             "realized_total": round(self._realized_total, 4),
             "closed_trades": self._closed_count,
             "wins": self._wins,
+        }
+
+    async def bump_llm(self, prompt_tokens: int, completion_tokens: int) -> None:
+        self._llm_calls += 1
+        self._llm_prompt_tokens += prompt_tokens
+        self._llm_completion_tokens += completion_tokens
+        day = _utc_day()
+        self._llm_calls_by_day[day] = self._llm_calls_by_day.get(day, 0) + 1
+
+    async def llm_usage(self) -> dict:
+        return {
+            "calls_total": self._llm_calls,
+            "calls_today": self._llm_calls_by_day.get(_utc_day(), 0),
+            "prompt_tokens": self._llm_prompt_tokens,
+            "completion_tokens": self._llm_completion_tokens,
+            "total_tokens": self._llm_prompt_tokens + self._llm_completion_tokens,
         }
 
     async def seen_before(self, key: str, ttl_s: int) -> bool:
@@ -322,6 +346,28 @@ class RedisStore:
             "realized_total": round(float(total), 4) if total else 0.0,
             "closed_trades": int(closed) if closed else 0,
             "wins": int(wins) if wins else 0,
+        }
+
+    async def bump_llm(self, prompt_tokens: int, completion_tokens: int) -> None:
+        await self._r.incr("fst:llm:calls")
+        await self._r.incrby("fst:llm:prompt_tokens", prompt_tokens)
+        await self._r.incrby("fst:llm:completion_tokens", completion_tokens)
+        day_key = f"fst:llm:calls:{_utc_day()}"
+        await self._r.incr(day_key)
+        await self._r.expire(day_key, 2 * 24 * _HOUR_S)
+
+    async def llm_usage(self) -> dict:
+        calls = await self._r.get("fst:llm:calls")
+        today = await self._r.get(f"fst:llm:calls:{_utc_day()}")
+        pt = await self._r.get("fst:llm:prompt_tokens")
+        ct = await self._r.get("fst:llm:completion_tokens")
+        pt, ct = int(pt) if pt else 0, int(ct) if ct else 0
+        return {
+            "calls_total": int(calls) if calls else 0,
+            "calls_today": int(today) if today else 0,
+            "prompt_tokens": pt,
+            "completion_tokens": ct,
+            "total_tokens": pt + ct,
         }
 
     async def seen_before(self, key: str, ttl_s: int) -> bool:

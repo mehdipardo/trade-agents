@@ -285,7 +285,41 @@ def build_structured_llm(settings: Settings) -> Any | None:
         log.warning("llm_provider_unavailable", provider=provider)
         return None
 
-    return llm.with_structured_output(Signal)
+    # include_raw so we can read token usage off the raw message for the
+    # Groq-consumption tracker (structured output alone drops usage metadata).
+    return llm.with_structured_output(Signal, include_raw=True)
+
+
+async def _record_usage(raw: Any) -> None:
+    """Best-effort: log token usage from a raw LLM message. Never raises."""
+    try:
+        usage = getattr(raw, "usage_metadata", None) or {}
+        prompt = int(usage.get("input_tokens", 0) or 0)
+        completion = int(usage.get("output_tokens", 0) or 0)
+        from app.services.store import get_store
+
+        await get_store().bump_llm(prompt, completion)
+    except Exception as exc:  # noqa: BLE001 - tracking must never break analysis
+        log.debug("llm_usage_untracked", error=str(exc))
+
+
+def _extract_signal(result: Any) -> tuple[Signal, Any]:
+    """Return (signal, raw_message_or_None) from a structured-output result.
+
+    Handles both include_raw dicts ({raw, parsed, parsing_error}) and a bare
+    Signal (test doubles / providers without include_raw)."""
+    if isinstance(result, Signal):
+        return result, None
+    if isinstance(result, dict):
+        parsed = result.get("parsed")
+        raw = result.get("raw")
+        if isinstance(parsed, Signal):
+            return parsed, raw
+        if parsed is not None:
+            return Signal.model_validate(parsed), raw
+        if result.get("parsing_error"):
+            raise ValueError(str(result["parsing_error"]))
+    return Signal.model_validate(result), None
 
 
 def langfuse_callbacks(settings: Settings) -> list[Any]:
@@ -331,7 +365,9 @@ async def _analyze_with_llm(event: NewsEvent, settings: Settings, structured_llm
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
             result = await structured_llm.ainvoke(messages, config=config)
-            signal = result if isinstance(result, Signal) else Signal.model_validate(result)
+            signal, raw = _extract_signal(result)
+            if raw is not None:
+                await _record_usage(raw)
             return signal
         except Exception as exc:  # noqa: BLE001 - degrade gracefully (incl. ValidationError)
             log.warning("analyst_attempt_failed", attempt=attempt, error=str(exc))

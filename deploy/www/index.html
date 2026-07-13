@@ -185,6 +185,7 @@
     <div class="brand"><span class="dot" id="healthDot"></span>FlashSentiment</div>
     <span class="chip violet">Paper · Testnet</span>
     <span class="chip" id="modeChip">connecting…</span>
+    <span class="chip" id="llmChip" title="Groq LLM usage — calls today · total tokens · est. cost">LLM —</span>
     <div class="spacer"></div>
     <nav class="tabs" role="tablist">
       <button class="on" data-tab="cockpit">Cockpit</button>
@@ -474,6 +475,15 @@ function renderBacktest(r){
     tile('Fees',`$${(r.total_fees_quote||0).toFixed(2)}`);
 }
 async function loadBacktest(){try{const {report}=await api('/api/backtest');renderBacktest(report);}catch(e){}}
+
+/* ---- Groq LLM usage tracker ---- */
+async function loadLlmUsage(){
+  try{const u=await api('/api/llm-usage');
+    const k=(u.total_tokens/1000).toFixed(u.total_tokens>=10000?0:1);
+    $('#llmChip').textContent=`LLM ${u.calls_today} today · ${k}k tok · $${(u.est_cost_usd||0).toFixed(2)}`;
+    $('#llmChip').title=`Groq ${u.provider} · ${u.calls_total} calls total · ${u.total_tokens.toLocaleString()} tokens · est $${u.est_cost_usd}`;
+  }catch(e){}
+}
 $('#btRun').onclick=async()=>{const b=$('#btRun');b.disabled=true;b.textContent='Running…';
   try{const r=await api('/admin/backtest/replay',{});renderBacktest(r);loadSignals();}catch(e){}finally{b.disabled=false;b.textContent='Run';}};
 
@@ -574,10 +584,10 @@ function connectWs(){
 /* ---- Boot ---- */
 async function hydrate(){
   try{const h=await api('/api/health');$('#healthDot').className='dot ok';$('#modeChip').textContent=`${h.exchange_id} · ${h.llm_provider}`;}catch(e){$('#healthDot').className='dot';}
-  loadPerformance();refreshState();loadStrategies();loadSignals();loadOrders();loadCritiques();loadBacktest();
+  loadPerformance();refreshState();loadStrategies();loadSignals();loadOrders();loadCritiques();loadBacktest();loadLlmUsage();
 }
 setChart('BTC/USDT');showScanner();connectWs();
-setInterval(()=>{refreshState();loadPerformance();},5000);
+setInterval(()=>{refreshState();loadPerformance();loadLlmUsage();},5000);
 setInterval(loadCritiques,15000);
 </script>
 </body>
