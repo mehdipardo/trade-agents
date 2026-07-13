@@ -17,4 +17,4 @@ structlog>=24.0
 orjson>=3.10
 python-dotenv>=1.0
 # Optional observability (Étape 9 stretch; inert unless LANGFUSE_* keys are set)
-langfuse>=2.0
+langfuse>=2.0,<3

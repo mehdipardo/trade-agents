@@ -359,6 +359,8 @@ async def _analyze_with_llm(
     event: NewsEvent, settings: Settings, structured_llm: Any, prompt_version: str | None = None
 ) -> Signal:
     """Call the structured LLM with bounded retries and NEUTRAL fallback."""
+    from app.prompts.analyst import PROMPT_VERSION
+
     system = build_system_prompt(
         settings.asset_whitelist_set, settings.confidence_threshold, prompt_version
     )
@@ -366,7 +368,17 @@ async def _analyze_with_llm(
         SystemMessage(content=system),
         HumanMessage(content=build_user_message(event)),
     ]
-    config = {"callbacks": langfuse_callbacks(settings)}
+    # Trace metadata so a decision can be found/replayed in Langfuse by event.
+    config = {
+        "callbacks": langfuse_callbacks(settings),
+        "run_name": "analyst",
+        "metadata": {
+            "event_id": event.id,
+            "source": event.source,
+            "prompt_version": prompt_version or PROMPT_VERSION,
+            "langfuse_tags": ["analyst", event.source],
+        },
+    }
 
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:

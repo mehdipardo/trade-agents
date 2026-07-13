@@ -84,10 +84,17 @@ async def _call_llm(user_message: str) -> str | None:
     except ImportError:
         return None
     try:
-        msg = await llm.ainvoke([
-            SystemMessage(content=_SYSTEM_PROMPT),
-            HumanMessage(content=user_message),
-        ])
+        from app.services.llm import langfuse_callbacks
+
+        config = {
+            "callbacks": langfuse_callbacks(settings),
+            "run_name": "critique",
+            "metadata": {"langfuse_tags": ["critique", "post-mortem"]},
+        }
+        msg = await llm.ainvoke(
+            [SystemMessage(content=_SYSTEM_PROMPT), HumanMessage(content=user_message)],
+            config=config,
+        )
         text = getattr(msg, "content", None)
         if isinstance(text, str) and text.strip():
             return text.strip()[:600]

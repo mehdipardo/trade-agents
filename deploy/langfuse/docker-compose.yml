@@ -1,0 +1,46 @@
+# Self-hosted Langfuse (LLM observability) for the VPS.
+#
+# Runs Langfuse + its Postgres, on the same Docker network as the app so the
+# backend reaches it at http://langfuse:3000. Start it alongside the main stack:
+#
+#   cd /root/trade-agents
+#   docker compose -f docker-compose.prod.yml -f deploy/langfuse/docker-compose.yml up -d
+#
+# Then open http://<vps-ip>:3000 (or reverse-proxy it), create a project, and
+# paste its keys into .env (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY), keep
+# LANGFUSE_HOST=http://langfuse:3000, and restart the app container.
+
+services:
+  langfuse-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  langfuse:
+    image: langfuse/langfuse:2
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      # CHANGE THESE before exposing the instance publicly.
+      NEXTAUTH_SECRET: change-me-langfuse-nextauth
+      SALT: change-me-langfuse-salt
+      NEXTAUTH_URL: http://localhost:3000
+      TELEMETRY_ENABLED: "false"
+
+volumes:
+  langfuse_pg:
