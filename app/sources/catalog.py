@@ -130,19 +130,26 @@ CATALOG: tuple[SourceSpec, ...] = (
     ),
     SourceSpec(
         id="crypto_news_rss",
-        name="Crypto news (CoinDesk, The Block…)",
+        name="World & markets news (RSS)",
         kind="news",
-        description="Always-on baseline crypto headlines; dedup filters the noise.",
+        description=(
+            "Broad RSS across world/geopolitics + business/markets (BBC, CNBC…). "
+            "Complements the crypto firehose so TradFi and geopolitical stories "
+            "(the Trump/Iran class of event) are covered too."
+        ),
         cost="free",
         reactivity="minutes (poll)",
-        default_enabled=False,
-        tags=("baseline",),
+        default_enabled=True,
+        notes="Ships with a curated default feed set; override the list below "
+        "with any comma-separated public RSS endpoints.",
+        tags=("news", "broad", "tradfi", "geopolitics"),
         config_fields=(
             ConfigField(
                 name="rss_feeds",
-                label="RSS feed URLs",
-                placeholder="https://www.coindesk.com/arc/outboundfeeds/rss,https://feeds.bloomberg.com/markets/news.rss",
-                help="Comma-separated. Public RSS endpoints only.",
+                label="RSS feed URLs (optional override)",
+                placeholder="leave empty to use the built-in world+markets feeds",
+                required=False,
+                help="Comma-separated public RSS endpoints. Empty = curated defaults.",
             ),
         ),
     ),

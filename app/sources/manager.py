@@ -176,12 +176,16 @@ def _congress_bills(
 def _crypto_news_rss(
     queue: asyncio.Queue[NewsEvent], settings: MergedSettings
 ) -> Coroutine[Any, Any, None] | None:
-    feeds_raw = getattr(settings, "rss_feeds", "")
-    if not feeds_raw:
-        return None
-    from app.ingestion.rss_poller import parse_feeds_setting, rss_poller_loop
+    from app.ingestion.rss_poller import (
+        DEFAULT_RSS_FEEDS,
+        parse_feeds_setting,
+        rss_poller_loop,
+    )
 
-    feeds = parse_feeds_setting(feeds_raw)
+    # Default-enabled, key-less source: fall back to the curated world+markets
+    # feed set when the operator hasn't provided an override.
+    feeds_raw = getattr(settings, "rss_feeds", "")
+    feeds = parse_feeds_setting(feeds_raw) if feeds_raw else list(DEFAULT_RSS_FEEDS)
     if not feeds:
         return None
     return rss_poller_loop(

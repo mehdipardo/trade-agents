@@ -6,7 +6,12 @@ import asyncio
 
 from app.config import Settings
 from app.services.store import InMemoryStore, set_store
-from app.sources.manager import MergedSettings, _econ_calendar, _news_aggregator
+from app.sources.manager import (
+    MergedSettings,
+    _crypto_news_rss,
+    _econ_calendar,
+    _news_aggregator,
+)
 
 
 def _merged(**overrides: str) -> MergedSettings:
@@ -37,3 +42,18 @@ def test_store_override_takes_precedence_over_env() -> None:
     set_store(InMemoryStore())
     merged = _merged(aggregator_sse_url="https://override.example/sse")
     assert merged.aggregator_sse_url == "https://override.example/sse"
+
+
+def test_rss_source_falls_back_to_default_feeds() -> None:
+    coro = _crypto_news_rss(asyncio.Queue(), _merged())
+    assert coro is not None  # runs on the curated default feed set
+    _close(coro)
+
+
+def test_three_heterogeneous_sources_enabled_by_default() -> None:
+    from app.sources import catalog
+
+    catalog.reset_state()
+    enabled = {s.id for s in catalog.list_specs() if catalog.is_enabled(s.id)}
+    # Crypto firehose + macro calendar + broad world/markets RSS = 3 markets.
+    assert enabled == {"news_aggregator", "econ_calendar", "crypto_news_rss"}

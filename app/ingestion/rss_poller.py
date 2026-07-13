@@ -19,6 +19,18 @@ from app.models.schemas import NewsEvent
 
 log = get_logger("app.ingestion.rss")
 
+# Curated, broadly-stable feeds covering world/geopolitics + business/markets —
+# heterogeneous coverage that complements the crypto-centric aggregator (this is
+# what catches the Trump/Iran-class story the crypto firehose would miss). Used
+# as the default when no RSS_FEEDS override is configured. Dead feeds degrade
+# gracefully (one bad feed never stops the loop).
+DEFAULT_RSS_FEEDS: tuple[str, ...] = (
+    "https://feeds.bbci.co.uk/news/world/rss.xml",       # world / geopolitics
+    "https://feeds.bbci.co.uk/news/business/rss.xml",    # business / markets
+    "https://www.cnbc.com/id/100003114/device/rss/rss.html",  # CNBC top news
+    "https://feeds.bbci.co.uk/news/technology/rss.xml",  # tech / big-cap stocks
+)
+
 
 def parse_entry(entry: dict[str, Any]) -> dict[str, Any]:
     """Map a feedparser entry to a normalizer payload."""
