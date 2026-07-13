@@ -64,6 +64,7 @@ class Store(Protocol):
 
     # LLM usage tracking (Groq consumption watch)
     async def bump_llm(self, prompt_tokens: int, completion_tokens: int) -> None: ...
+    async def bump_news_analyzed(self) -> None: ...
     async def llm_usage(self) -> dict: ...
 
     # Dedup
@@ -102,6 +103,9 @@ class InMemoryStore:
         self._llm_prompt_tokens = 0
         self._llm_completion_tokens = 0
         self._llm_calls_by_day: dict[str, int] = {}
+        self._llm_tokens_by_day: dict[str, list[int]] = {}  # day -> [prompt, completion]
+        self._news_analyzed = 0
+        self._news_analyzed_by_day: dict[str, int] = {}
 
     async def connect(self) -> None:
         log.info("store_backend", backend="in-memory")
@@ -194,14 +198,28 @@ class InMemoryStore:
         self._llm_completion_tokens += completion_tokens
         day = _utc_day()
         self._llm_calls_by_day[day] = self._llm_calls_by_day.get(day, 0) + 1
+        tok = self._llm_tokens_by_day.setdefault(day, [0, 0])
+        tok[0] += prompt_tokens
+        tok[1] += completion_tokens
+
+    async def bump_news_analyzed(self) -> None:
+        self._news_analyzed += 1
+        day = _utc_day()
+        self._news_analyzed_by_day[day] = self._news_analyzed_by_day.get(day, 0) + 1
 
     async def llm_usage(self) -> dict:
+        day = _utc_day()
+        pt_today, ct_today = self._llm_tokens_by_day.get(day, [0, 0])
         return {
             "calls_total": self._llm_calls,
-            "calls_today": self._llm_calls_by_day.get(_utc_day(), 0),
+            "calls_today": self._llm_calls_by_day.get(day, 0),
             "prompt_tokens": self._llm_prompt_tokens,
             "completion_tokens": self._llm_completion_tokens,
             "total_tokens": self._llm_prompt_tokens + self._llm_completion_tokens,
+            "prompt_tokens_today": pt_today,
+            "completion_tokens_today": ct_today,
+            "news_analyzed_total": self._news_analyzed,
+            "news_analyzed_today": self._news_analyzed_by_day.get(day, 0),
         }
 
     async def seen_before(self, key: str, ttl_s: int) -> bool:
@@ -349,25 +367,43 @@ class RedisStore:
         }
 
     async def bump_llm(self, prompt_tokens: int, completion_tokens: int) -> None:
+        day = _utc_day()
         await self._r.incr("fst:llm:calls")
         await self._r.incrby("fst:llm:prompt_tokens", prompt_tokens)
         await self._r.incrby("fst:llm:completion_tokens", completion_tokens)
-        day_key = f"fst:llm:calls:{_utc_day()}"
-        await self._r.incr(day_key)
-        await self._r.expire(day_key, 2 * 24 * _HOUR_S)
+        for key, amount in (
+            (f"fst:llm:calls:{day}", 1),
+            (f"fst:llm:pt:{day}", prompt_tokens),
+            (f"fst:llm:ct:{day}", completion_tokens),
+        ):
+            await self._r.incrby(key, amount)
+            await self._r.expire(key, 2 * 24 * _HOUR_S)
+
+    async def bump_news_analyzed(self) -> None:
+        day = _utc_day()
+        await self._r.incr("fst:news_analyzed")
+        dk = f"fst:news_analyzed:{day}"
+        await self._r.incr(dk)
+        await self._r.expire(dk, 2 * 24 * _HOUR_S)
 
     async def llm_usage(self) -> dict:
-        calls = await self._r.get("fst:llm:calls")
-        today = await self._r.get(f"fst:llm:calls:{_utc_day()}")
-        pt = await self._r.get("fst:llm:prompt_tokens")
-        ct = await self._r.get("fst:llm:completion_tokens")
-        pt, ct = int(pt) if pt else 0, int(ct) if ct else 0
+        day = _utc_day()
+
+        async def _int(key: str) -> int:
+            v = await self._r.get(key)
+            return int(v) if v else 0
+
+        pt, ct = await _int("fst:llm:prompt_tokens"), await _int("fst:llm:completion_tokens")
         return {
-            "calls_total": int(calls) if calls else 0,
-            "calls_today": int(today) if today else 0,
+            "calls_total": await _int("fst:llm:calls"),
+            "calls_today": await _int(f"fst:llm:calls:{day}"),
             "prompt_tokens": pt,
             "completion_tokens": ct,
             "total_tokens": pt + ct,
+            "prompt_tokens_today": await _int(f"fst:llm:pt:{day}"),
+            "completion_tokens_today": await _int(f"fst:llm:ct:{day}"),
+            "news_analyzed_total": await _int("fst:news_analyzed"),
+            "news_analyzed_today": await _int(f"fst:news_analyzed:{day}"),
         }
 
     async def seen_before(self, key: str, ttl_s: int) -> bool:

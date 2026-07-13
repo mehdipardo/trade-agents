@@ -269,6 +269,11 @@
         </div>
 
         <div class="card">
+          <header><h3>LLM cost</h3><span class="h-sub">Groq · today</span><div class="spacer"></div><span class="chip violet" id="llmProvider">groq</span></header>
+          <div class="bt-grid" id="llmCost"></div>
+        </div>
+
+        <div class="card">
           <header><h3>Signals</h3><span class="h-sub">recent</span></header>
           <div class="body p0" id="signalList"></div>
         </div>
@@ -457,12 +462,21 @@ async function loadCritiques(){
   }catch(e){}
 }
 
-/* ---- Groq LLM usage tracker ---- */
+/* ---- Groq LLM usage / cost tracker ---- */
 async function loadLlmUsage(){
   try{const u=await api('/api/llm-usage');
     const k=(u.total_tokens/1000).toFixed(u.total_tokens>=10000?0:1);
-    $('#llmChip').textContent=`LLM ${u.calls_today} today · ${k}k tok · $${(u.est_cost_usd||0).toFixed(2)}`;
-    $('#llmChip').title=`Groq ${u.provider} · ${u.calls_total} calls total · ${u.total_tokens.toLocaleString()} tokens · est $${u.est_cost_usd}`;
+    $('#llmChip').textContent=`LLM $${(u.cost_today_usd||0).toFixed(2)} today · ${u.news_analyzed_today||0} news`;
+    $('#llmChip').title=`Groq ${u.provider} · ${u.calls_total} calls · ${u.total_tokens.toLocaleString()} tokens · est $${u.est_cost_usd} lifetime`;
+    $('#llmProvider').textContent=u.provider;
+    const c=$('#llmCost');
+    const tile=(l,v,cls)=>`<div class="bt-tile"><div class="label">${l}</div><div class="v ${cls||''}">${v}</div></div>`;
+    c.innerHTML=
+      tile('Cost today',`$${(u.cost_today_usd||0).toFixed(2)}`)+
+      tile('News analyzed',`${u.news_analyzed_today||0}`)+
+      tile('$ / news',`$${(u.cost_per_news_today_usd||u.cost_per_news_usd||0).toFixed(4)}`)+
+      tile('Tokens today',`${(((u.prompt_tokens_today||0)+(u.completion_tokens_today||0))/1000).toFixed(1)}k`)+
+      tile('Lifetime',`$${(u.est_cost_usd||0).toFixed(2)}`);
   }catch(e){}
 }
 /* ---- Sources & Calendar ---- */

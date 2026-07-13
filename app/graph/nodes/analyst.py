@@ -19,7 +19,10 @@ from app.services.llm import analyze
 
 @timed_node("analyst")
 async def analyst_node(state: TradingState) -> dict[str, Any]:
+    from app.services.store import get_store
+
     settings = get_settings()
+    await get_store().bump_news_analyzed()
     signal = await analyze(state["event"], settings)
 
     tradable = (

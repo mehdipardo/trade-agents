@@ -114,12 +114,26 @@ _GROQ_IN_PER_M = 0.59
 _GROQ_OUT_PER_M = 0.79
 
 
+def _cost(prompt_tokens: int, completion_tokens: int) -> float:
+    return (
+        prompt_tokens / 1_000_000 * _GROQ_IN_PER_M
+        + completion_tokens / 1_000_000 * _GROQ_OUT_PER_M
+    )
+
+
 @router.get("/llm-usage")
 async def llm_usage() -> dict[str, object]:
-    """Groq consumption tracker: calls + tokens + a rough cost estimate."""
+    """Groq consumption tracker: calls, tokens, news analyzed, cost per signal."""
     u = await get_store().llm_usage()
-    est = (
-        u["prompt_tokens"] / 1_000_000 * _GROQ_IN_PER_M
-        + u["completion_tokens"] / 1_000_000 * _GROQ_OUT_PER_M
-    )
-    return {**u, "provider": get_settings().llm_provider, "est_cost_usd": round(est, 4)}
+    cost_total = _cost(u["prompt_tokens"], u["completion_tokens"])
+    cost_today = _cost(u["prompt_tokens_today"], u["completion_tokens_today"])
+    news_total = u["news_analyzed_total"]
+    news_today = u["news_analyzed_today"]
+    return {
+        **u,
+        "provider": get_settings().llm_provider,
+        "est_cost_usd": round(cost_total, 4),
+        "cost_today_usd": round(cost_today, 4),
+        "cost_per_news_usd": round(cost_total / news_total, 6) if news_total else 0.0,
+        "cost_per_news_today_usd": round(cost_today / news_today, 6) if news_today else 0.0,
+    }
