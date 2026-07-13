@@ -103,6 +103,23 @@ async def get_price(symbol: str) -> float | None:
     return None
 
 
+async def warm() -> None:
+    """Pre-create the client and load markets so the first trade isn't slow.
+
+    ccxt loads the full market list on the first ticker call (can take a few
+    seconds); doing it at startup keeps the executor's first price fetch fast.
+    Best-effort: never raises.
+    """
+    client = await _get_client()
+    if client is None:
+        return
+    try:
+        await client.load_markets()
+        log.info("price_provider_warmed", exchange_id=_exchange_id)
+    except Exception as exc:  # noqa: BLE001 - warming is best-effort
+        log.warning("price_warm_failed", error=str(exc))
+
+
 async def close() -> None:
     global _client
     if _client is not None:

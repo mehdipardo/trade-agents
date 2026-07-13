@@ -16,6 +16,7 @@ def make_signal(
     asset: str | None = "BTC/USDT",
     confidence: float = 0.9,
     actionability: int = 4,
+    impact_score: int = 5,
 ) -> Signal:
     return Signal(
         sentiment=sentiment,  # type: ignore[arg-type]
@@ -25,7 +26,12 @@ def make_signal(
         rationale="test",
         event_type="macro",
         actionability=actionability,
+        impact_score=impact_score,
     )
+
+
+def make_signal_impact(impact: int) -> Signal:
+    return make_signal(intensity=5, impact_score=impact)
 
 
 def make_ctx(
@@ -57,29 +63,35 @@ def test_bull_is_approved_buy() -> None:
     assert v.take_profit_pct == CONFIG.take_profit_pct
 
 
-@pytest.mark.parametrize(
-    "intensity,expected_pct",
-    [(3, 0.01), (4, 0.02), (5, 0.03)],
-)
-def test_sizing_by_intensity(intensity: int, expected_pct: float) -> None:
-    v = evaluate(make_signal(intensity=intensity), make_ctx(equity_quote=1000.0), CONFIG)
+def test_risk_based_sizing_targets_the_sl_loss() -> None:
+    # Default: 1% risk, 1.5% SL -> notional 1000*0.01/0.015 = 666.67, and the
+    # dollar loss if the SL is hit is exactly 1% of equity ($10).
+    v = evaluate(make_signal(), make_ctx(equity_quote=1000.0), CONFIG)
     assert v.approved
-    # Capped at min(5% equity, 100). For equity=1000 the cap is 50.
-    expected = min(1000.0 * expected_pct, min(0.05 * 1000.0, 100.0))
-    assert v.position_size_quote == pytest.approx(expected)
+    assert v.position_size_quote == pytest.approx(666.67, abs=0.01)
+    risk_at_sl = v.position_size_quote * (v.stop_loss_pct / 100)
+    assert risk_at_sl == pytest.approx(10.0, abs=0.01)
 
 
-def test_notional_cap_abs_applies_on_large_equity() -> None:
-    # 3% of 100k = 3000, but the absolute cap is 100 USDT.
-    v = evaluate(make_signal(intensity=5), make_ctx(equity_quote=100_000.0), CONFIG)
-    assert v.approved
-    assert v.position_size_quote == 100.0
+def test_gross_exposure_cap_applies() -> None:
+    # A very tight SL would imply a huge notional; capped at max_gross_exposure.
+    cfg = RiskConfig(risk_per_trade_pct=0.01, stop_loss_pct=0.05, max_gross_exposure=3.0)
+    v = evaluate(make_signal(), make_ctx(equity_quote=1000.0), cfg)
+    assert v.position_size_quote == pytest.approx(3000.0)  # 3x equity cap
 
 
-def test_notional_cap_equity_pct_applies() -> None:
-    # 2% of 1000 = 20 <= cap 50 -> not capped.
-    v = evaluate(make_signal(intensity=4), make_ctx(equity_quote=1000.0), CONFIG)
-    assert v.position_size_quote == pytest.approx(20.0)
+def test_high_impact_scales_risk_not_stop() -> None:
+    cfg = RiskConfig(
+        risk_per_trade_pct=0.01, stop_loss_pct=1.5, high_impact_threshold=8,
+        leverage_multiplier=3, max_gross_exposure=5.0,
+    )
+    base = evaluate(make_signal(intensity=5), make_ctx(equity_quote=1000.0), cfg)
+    boosted = evaluate(
+        make_signal_impact(9), make_ctx(equity_quote=1000.0), cfg
+    )
+    assert boosted.leverage == 3
+    assert boosted.stop_loss_pct == base.stop_loss_pct  # SL % unchanged
+    assert boosted.position_size_quote == pytest.approx(base.position_size_quote * 3, abs=0.1)
 
 
 def test_bear_opens_short() -> None:

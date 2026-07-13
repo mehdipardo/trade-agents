@@ -23,22 +23,24 @@ class Strategy:
     min_intensity: int
     min_actionability: int
     confidence_threshold: float
-    # Sizing
-    max_notional_abs: float
-    max_notional_equity_pct: float
+    # Risk-based sizing: fraction of equity risked at the SL. Notional is
+    # derived: (equity * risk_per_trade_pct) / (stop_loss_pct/100).
+    risk_per_trade_pct: float
     # SL / TP (percent, absolute values applied by the executor)
     stop_loss_pct: float
     take_profit_pct: float
     # Throughput
     max_trades_per_hour: int
     cooldown_s: int
+    # Notional ceiling as a multiple of equity (futures leverage cap).
+    max_gross_exposure: float = 3.0
     # Runner mechanism: close (1 - runner_pct) at TP, keep runner_pct with SL
     # moved to breakeven, aiming at runner_tp_pct.
     runner_pct: float = 0.0
     runner_tp_pct: float = 0.0
-    # High-impact leverage boost: when Signal.impact_score >= threshold, SL and
-    # TP percents are multiplied by leverage_multiplier (position size grows via
-    # notional cap; PnL scales accordingly).
+    # High-impact boost: when Signal.impact_score >= threshold, the per-trade
+    # risk budget (and thus the position size) is multiplied by
+    # leverage_multiplier. SL/TP percents stay fixed.
     high_impact_threshold: int = 8
     leverage_multiplier: int = 1
 
@@ -47,30 +49,31 @@ STRATEGIES: dict[str, Strategy] = {
     "conservative": Strategy(
         id="conservative",
         name="Conservative",
-        description="High-conviction only. Tight SL, small size, long cooldowns.",
+        description="High-conviction only. Risks 0.5%/trade (~$5 on $1k). Tight SL.",
         min_intensity=4,
         min_actionability=4,
         confidence_threshold=0.75,
-        max_notional_abs=50.0,
-        max_notional_equity_pct=0.02,
+        risk_per_trade_pct=0.005,
         stop_loss_pct=1.0,
         take_profit_pct=2.0,
         max_trades_per_hour=3,
         cooldown_s=1800,
+        max_gross_exposure=2.0,
     ),
     "balanced": Strategy(
         id="balanced",
         name="Balanced",
-        description="Default: SL 1.5% / TP 3%. 80% closes at TP, 20% runs to +50% (SL to entry).",
+        description="Default. Risks 1%/trade (~$10 on $1k). SL 1.5% / TP 3%. "
+        "80% closes at TP, 20% runs to +50% (SL to entry).",
         min_intensity=3,
         min_actionability=2,
         confidence_threshold=0.60,
-        max_notional_abs=100.0,
-        max_notional_equity_pct=0.05,
+        risk_per_trade_pct=0.01,
         stop_loss_pct=1.5,
         take_profit_pct=3.0,
         max_trades_per_hour=6,
         cooldown_s=900,
+        max_gross_exposure=3.0,
         runner_pct=0.20,
         runner_tp_pct=50.0,
         high_impact_threshold=8,
@@ -79,16 +82,17 @@ STRATEGIES: dict[str, Strategy] = {
     "aggressive": Strategy(
         id="aggressive",
         name="Aggressive",
-        description="Trades weaker signals. Bigger size, wider SL/TP, runner to +80%.",
+        description="Trades weaker signals. Risks 2%/trade (~$20 on $1k). Wider "
+        "SL/TP, runner to +80%.",
         min_intensity=3,
         min_actionability=2,
         confidence_threshold=0.55,
-        max_notional_abs=200.0,
-        max_notional_equity_pct=0.10,
+        risk_per_trade_pct=0.02,
         stop_loss_pct=2.5,
         take_profit_pct=5.0,
         max_trades_per_hour=10,
         cooldown_s=300,
+        max_gross_exposure=5.0,
         runner_pct=0.25,
         runner_tp_pct=80.0,
         high_impact_threshold=8,
@@ -97,16 +101,16 @@ STRATEGIES: dict[str, Strategy] = {
     "scalp": Strategy(
         id="scalp",
         name="Scalp",
-        description="Fast in/out on strong signals. Very tight SL/TP.",
+        description="Fast in/out on strong signals. Risks 0.5%/trade. Very tight SL/TP.",
         min_intensity=3,
         min_actionability=4,
         confidence_threshold=0.60,
-        max_notional_abs=100.0,
-        max_notional_equity_pct=0.05,
+        risk_per_trade_pct=0.005,
         stop_loss_pct=0.5,
         take_profit_pct=1.0,
         max_trades_per_hour=15,
         cooldown_s=120,
+        max_gross_exposure=3.0,
     ),
 }
 

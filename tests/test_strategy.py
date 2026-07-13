@@ -33,7 +33,7 @@ def test_get_strategy_falls_back_to_default() -> None:
 def test_conservative_is_tighter_than_aggressive() -> None:
     c, a = STRATEGIES["conservative"], STRATEGIES["aggressive"]
     assert c.stop_loss_pct < a.stop_loss_pct
-    assert c.max_notional_abs < a.max_notional_abs
+    assert c.risk_per_trade_pct < a.risk_per_trade_pct
     assert c.confidence_threshold > a.confidence_threshold
     assert c.min_intensity >= a.min_intensity
 
@@ -44,7 +44,7 @@ def test_risk_config_overlaid_by_strategy() -> None:
     config = RiskConfig.from_settings(settings, scalp)
     assert config.stop_loss_pct == scalp.stop_loss_pct
     assert config.take_profit_pct == scalp.take_profit_pct
-    assert config.max_notional_abs == scalp.max_notional_abs
+    assert config.risk_per_trade_pct == scalp.risk_per_trade_pct
     assert config.confidence_threshold == scalp.confidence_threshold
     # Daily loss limit stays global.
     assert config.daily_loss_limit_pct == settings.daily_loss_limit_pct

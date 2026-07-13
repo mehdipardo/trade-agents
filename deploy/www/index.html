@@ -416,9 +416,9 @@ async function loadStrategies(){
         `<span class="active-tag">Active</span>
          <div class="s-name">${s.name}</div>
          <div class="s-desc">${s.description}</div>
-         <div class="s-kpis"><span>SL <b>${s.stop_loss_pct}%</b></span><span>TP <b>${s.take_profit_pct}%</b></span>
-           ${runner}${lev}
-           <span>Size <b>≤$${s.max_notional_abs}</b></span><span>Conf <b>≥${(s.confidence_threshold*100).toFixed(0)}%</b></span></div>`);
+         <div class="s-kpis"><span>Risk <b>${(s.risk_per_trade_pct*100).toFixed(1)}%/trade</b></span><span>Conf <b>≥${(s.confidence_threshold*100).toFixed(0)}%</b></span>
+           <span>SL <b>${s.stop_loss_pct}%</b></span><span>TP <b>${s.take_profit_pct}%</b></span>
+           ${runner}${lev}</div>`);
       c.onclick=async()=>{try{await api('/admin/strategy',{id:s.id});loadStrategies();}catch(e){}};
       w.appendChild(c);
     });

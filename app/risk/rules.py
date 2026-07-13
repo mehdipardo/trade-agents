@@ -12,7 +12,7 @@ a short (sell); one position per asset in either direction.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from app.models.schemas import RiskVerdict, Signal
 
@@ -24,12 +24,11 @@ class RiskConfig:
     confidence_threshold: float = 0.6
     min_intensity: int = 3
     min_actionability: int = 2
-    # Fraction of equity to risk per intensity bucket.
-    sizing_by_intensity: dict[int, float] = field(
-        default_factory=lambda: {3: 0.01, 4: 0.02, 5: 0.03}
-    )
-    max_notional_abs: float = 100.0  # USDT hard cap
-    max_notional_equity_pct: float = 0.05  # <= 5% of equity
+    # Risk-based sizing: fraction of equity lost if the SL is hit.
+    risk_per_trade_pct: float = 0.01
+    max_gross_exposure: float = 3.0  # notional cap as a multiple of equity
+    max_notional_abs: float = 100.0  # legacy (display only)
+    max_notional_equity_pct: float = 0.05  # legacy (display only)
     stop_loss_pct: float = 1.5
     take_profit_pct: float = 3.0  # RR 1:2
     max_trades_per_hour: int = 6
@@ -54,8 +53,10 @@ class RiskConfig:
             confidence_threshold=source.confidence_threshold,  # type: ignore[attr-defined]
             min_intensity=source.min_intensity,  # type: ignore[attr-defined]
             min_actionability=source.min_actionability,  # type: ignore[attr-defined]
-            max_notional_abs=source.max_notional_abs,  # type: ignore[attr-defined]
-            max_notional_equity_pct=source.max_notional_equity_pct,  # type: ignore[attr-defined]
+            risk_per_trade_pct=getattr(source, "risk_per_trade_pct", 0.01),
+            max_gross_exposure=getattr(
+                source, "max_gross_exposure", getattr(settings, "max_gross_exposure", 3.0)
+            ),
             stop_loss_pct=source.stop_loss_pct,  # type: ignore[attr-defined]
             take_profit_pct=source.take_profit_pct,  # type: ignore[attr-defined]
             max_trades_per_hour=source.max_trades_per_hour,  # type: ignore[attr-defined]
@@ -90,11 +91,20 @@ def daily_loss_breached(ctx: RiskContext, config: RiskConfig) -> bool:
     return ctx.daily_pnl_quote <= limit
 
 
-def _position_size_quote(intensity: int, ctx: RiskContext, config: RiskConfig) -> float:
-    pct = config.sizing_by_intensity.get(intensity, 0.0)
-    raw = ctx.equity_quote * pct
-    cap = min(config.max_notional_equity_pct * ctx.equity_quote, config.max_notional_abs)
-    return min(raw, cap)
+def _risk_based_notional(
+    risk_pct: float, sl_pct: float, ctx: RiskContext, config: RiskConfig
+) -> float:
+    """Notional sized so a stop-loss loses ``risk_pct`` of equity.
+
+    notional = risk_dollars / (sl_pct/100), capped at ``max_gross_exposure`` x
+    equity (a futures leverage ceiling).
+    """
+    if sl_pct <= 0:
+        return 0.0
+    risk_dollars = ctx.equity_quote * risk_pct
+    notional = risk_dollars / (sl_pct / 100.0)
+    cap = config.max_gross_exposure * ctx.equity_quote
+    return min(notional, cap)
 
 
 def evaluate(signal: Signal, ctx: RiskContext, config: RiskConfig) -> RiskVerdict:
@@ -138,20 +148,21 @@ def evaluate(signal: Signal, ctx: RiskContext, config: RiskConfig) -> RiskVerdic
         return _reject("position already open on asset")
     side = "buy" if signal.sentiment == "BULL" else "sell"
 
-    # --- Sizing ----------------------------------------------------------
-    size = _position_size_quote(signal.intensity, ctx, config)
-    if size <= 0:
-        return _reject("computed position size is zero")
-
     # --- Leverage boost on high-impact signals ---------------------------
-    # A high impact_score widens SL and TP (and grows notional) by the
-    # multiplier. The dollar risk on SL therefore scales with the multiplier.
+    # A high impact_score risks MORE per trade (x the multiplier). SL/TP percents
+    # stay fixed; sizing up the risk budget is what grows the position (which is
+    # exactly what leverage means on futures: same stop distance, bigger size).
     leverage = 1
     if signal.impact_score >= config.high_impact_threshold and config.leverage_multiplier > 1:
         leverage = config.leverage_multiplier
-    sl_pct = config.stop_loss_pct * leverage
-    tp_pct = config.take_profit_pct * leverage
-    size_quote = min(size * leverage, config.max_notional_abs * leverage)
+    sl_pct = config.stop_loss_pct
+    tp_pct = config.take_profit_pct
+
+    # --- Risk-based sizing ------------------------------------------------
+    risk_pct = config.risk_per_trade_pct * leverage
+    size_quote = _risk_based_notional(risk_pct, sl_pct, ctx, config)
+    if size_quote <= 0:
+        return _reject("computed position size is zero")
 
     return RiskVerdict(
         approved=True,

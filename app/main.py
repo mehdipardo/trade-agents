@@ -82,6 +82,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     manager = get_manager()
     await manager.start_all(app.state.queue)
 
+    # Warm the price client's market list so the first paper fill isn't slow.
+    if settings.use_live_prices:
+        core_tasks.append(asyncio.create_task(prices.warm(), name="price-warm"))
+
     try:
         yield
     finally:

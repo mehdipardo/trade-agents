@@ -55,12 +55,14 @@ def _signal(impact: int = 5, sentiment: str = "BULL") -> Signal:
 
 def test_balanced_strategy_applies_x3_on_impact_ge_8() -> None:
     config = RiskConfig.from_settings(_settings(), STRATEGIES["balanced"])
+    base = evaluate(_signal(impact=5), _ctx(), config)
     verdict = evaluate(_signal(impact=9), _ctx(), config)
     assert verdict.approved
     assert verdict.leverage == 3
-    # SL/TP widened by leverage.
-    assert verdict.stop_loss_pct == pytest.approx(1.5 * 3)
-    assert verdict.take_profit_pct == pytest.approx(3.0 * 3)
+    # SL/TP percents stay fixed; the position size (risk budget) is what x3s.
+    assert verdict.stop_loss_pct == pytest.approx(1.5)
+    assert verdict.take_profit_pct == pytest.approx(3.0)
+    assert verdict.position_size_quote == pytest.approx(base.position_size_quote * 3, abs=0.1)
 
 
 def test_no_leverage_below_threshold() -> None:
