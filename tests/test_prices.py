@@ -100,3 +100,9 @@ async def test_trade_ledger_records_and_reads() -> None:
     trades = await s.closed_trades()
     assert len(trades) == 2
     assert trades[0]["leg"] == "runner"  # newest first
+
+
+async def test_klines_none_for_non_crypto_symbol() -> None:
+    # TradFi symbols aren't Binance crypto pairs -> None (no network hit).
+    assert await prices.klines("NVDA/USDT") is None
+    assert await prices.klines("GOLD/USDT") is None

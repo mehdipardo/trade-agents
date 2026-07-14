@@ -155,6 +155,49 @@ def last_source(symbol: str) -> str:
     return _last_source.get(symbol, "mock")
 
 
+_BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
+_ALLOWED_INTERVALS = {"1m", "5m", "15m", "1h", "4h", "1d"}
+
+
+async def klines(symbol: str, interval: str = "5m", limit: int = 200) -> list[dict] | None:
+    """OHLC candles for ``symbol`` via Binance public REST (proxied server-side).
+
+    Returns ``[{time, open, high, low, close}, ...]`` with ``time`` in UNIX
+    seconds (what Lightweight Charts expects), or ``None`` when the symbol isn't
+    a supported Binance crypto pair (TradFi) or the fetch fails.
+    """
+    ticker = _BINANCE_MAP.get(symbol)
+    if ticker is None:
+        return None
+    if interval not in _ALLOWED_INTERVALS:
+        interval = "5m"
+    limit = max(10, min(int(limit), 500))
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(
+                _BINANCE_KLINES_URL,
+                params={"symbol": ticker, "interval": interval, "limit": limit},
+            )
+            resp.raise_for_status()
+            rows = resp.json()
+    except Exception as exc:  # noqa: BLE001 - chart is best-effort
+        log.warning("klines_failed", symbol=symbol, error=str(exc))
+        return None
+    out: list[dict] = []
+    for r in rows:
+        try:
+            out.append({
+                "time": int(r[0]) // 1000,  # openTime ms -> s
+                "open": float(r[1]),
+                "high": float(r[2]),
+                "low": float(r[3]),
+                "close": float(r[4]),
+            })
+        except (IndexError, ValueError, TypeError):
+            continue
+    return out
+
+
 async def warm() -> None:
     """Pre-create the client and load markets so the first trade isn't slow.
 

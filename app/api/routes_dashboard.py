@@ -134,6 +134,16 @@ async def trades(limit: int = 50) -> dict[str, list[dict]]:
     return {"trades": await get_store().closed_trades(limit)}
 
 
+@router.get("/candles")
+async def candles(symbol: str, interval: str = "5m", limit: int = 200) -> dict[str, object]:
+    """OHLC candles for the live chart (Binance, proxied so a geo-blocked
+    browser can still load them). ``candles`` is null for non-crypto symbols."""
+    from app.services.prices import klines
+
+    data = await klines(symbol, interval=interval, limit=limit)
+    return {"symbol": symbol, "interval": interval, "candles": data}
+
+
 # Groq llama-3.3-70b pricing (USD per 1M tokens) for a rough cost estimate.
 _GROQ_IN_PER_M = 0.59
 _GROQ_OUT_PER_M = 0.79
