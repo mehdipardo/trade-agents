@@ -257,6 +257,13 @@
         </div>
 
         <div class="card">
+          <header><h3>Closed trades</h3><span class="h-sub">entry → exit · reason · net P&amp;L</span></header>
+          <div class="body p0"><table class="pos-table"><thead><tr>
+            <th>Symbol</th><th>Side</th><th>Leg</th><th>Entry</th><th>Exit</th><th>Reason</th><th>P&amp;L</th>
+          </tr></thead><tbody id="tradeBody"></tbody></table></div>
+        </div>
+
+        <div class="card">
           <header><h3>Stop-loss post-mortems</h3><span class="h-sub">LLM critique of each SL hit</span></header>
           <div class="body p0" id="critList"></div>
         </div>
@@ -405,6 +412,24 @@ function renderRiskState(s){
 }
 async function refreshState(){
   try{const d=await api('/api/positions');renderPositions(d.positions);renderRiskState(d.state||{});}catch(e){}
+}
+
+const LEG={main_tp:'80% TP',runner:'Runner 20%',full:'Full',manual:'Manual'};
+async function loadTrades(){
+  try{const {trades}=await api('/api/trades'),b=$('#tradeBody');
+  if(!trades||!trades.length){b.innerHTML='<tr><td colspan="7" class="empty">No closed trades yet.</td></tr>';return;}
+  b.innerHTML=trades.map(t=>{
+    const long=t.side==='buy',p=t.pnl_quote||0;
+    return `<tr>
+      <td><b>${t.symbol}</b></td>
+      <td><span class="badge ${long?'long':'short'}">${long?'LONG':'SHORT'}</span></td>
+      <td><span class="dim">${LEG[t.leg]||t.leg}</span></td>
+      <td>${num(t.entry_price)}</td><td>${num(t.exit_price)}</td>
+      <td><span class="dim">${(t.reason||'').replace('_',' ')}</span></td>
+      <td class="${clsP(p)}">${p>=0?'+':''}${fmtUsd(p)}</td>
+    </tr>`;
+  }).join('');
+  }catch(e){}
 }
 
 /* ---- Strategy ---- */
@@ -563,7 +588,7 @@ function onWs(msg){
   else if(t==='order'){markDone('risk');fire('executor',`${p.side} ${p.symbol}`);markDone('executor');fire('notifier','sent');pipeLog(`executor → <b>${p.symbol}</b> ${p.side} @ ${num(p.avg_price)}`);if(p.symbol)setChart(p.symbol);spawn(3);}
   else if(t==='pipeline_done'){STAGES.forEach(s=>{if(tim[s]!=null)$('[data-meta]',stageEl[s]).textContent=tim[s].toFixed(1)+'ms';});markDone('notifier');
     if(p.status&&p.status!=='executed')pipeLog(`${(p.status||'').replace('_',' ')}${p.reject_reason?' · '+p.reject_reason:''}`);
-    loadSignals();loadOrders();refreshState();loadPerformance();loadCritiques();}
+    loadSignals();loadOrders();refreshState();loadPerformance();loadCritiques();loadTrades();}
 }
 function connectWs(){
   const proto=location.protocol==='https:'?'wss':'ws';
@@ -576,7 +601,7 @@ function connectWs(){
 /* ---- Boot ---- */
 async function hydrate(){
   try{const h=await api('/api/health');$('#healthDot').className='dot ok';$('#modeChip').textContent=`${h.exchange_id} · ${h.llm_provider}`;}catch(e){$('#healthDot').className='dot';}
-  loadPerformance();refreshState();loadStrategies();loadSignals();loadOrders();loadCritiques();loadLlmUsage();
+  loadPerformance();refreshState();loadStrategies();loadSignals();loadOrders();loadCritiques();loadTrades();loadLlmUsage();
 }
 setChart('BTC/USDT');showScanner();connectWs();
 setInterval(()=>{refreshState();loadPerformance();loadLlmUsage();},5000);

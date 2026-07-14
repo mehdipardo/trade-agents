@@ -128,6 +128,12 @@ async def critiques(limit: int = 20) -> dict[str, list[dict]]:
     return {"critiques": await get_store().critiques(limit)}
 
 
+@router.get("/trades")
+async def trades(limit: int = 50) -> dict[str, list[dict]]:
+    """Closed-trade ledger: entry, exit, reason, leg (main/runner), net PnL."""
+    return {"trades": await get_store().closed_trades(limit)}
+
+
 # Groq llama-3.3-70b pricing (USD per 1M tokens) for a rough cost estimate.
 _GROQ_IN_PER_M = 0.59
 _GROQ_OUT_PER_M = 0.79

@@ -19,6 +19,7 @@ demo self-contained.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from app.logging_config import get_logger
@@ -164,6 +165,24 @@ async def _finalize_close(
 
     if is_full_close:
         await store.set_position(symbol, is_open=False)
+
+    # Which leg closed: TP1 closes the 80% main leg; the rest are full/runner exits.
+    leg = "main_tp" if (reason == "take_profit" and not is_full_close) else (
+        "runner" if reason in ("runner_stop", "runner_take_profit") else "full"
+    )
+    await store.record_trade_close({
+        "ts": datetime.now(UTC).isoformat(),
+        "symbol": symbol,
+        "side": side,
+        "leg": leg,
+        "reason": reason,
+        "entry_price": entry,
+        "exit_price": round(exit_price, 8),
+        "amount": amount_closed,
+        "pnl_quote": round(pnl, 4),
+        "fee_quote": round(fee, 4),
+        "opened_at": position.get("opened_at"),
+    })
     log.info(
         "position_leg_closed",
         symbol=symbol,
@@ -301,6 +320,19 @@ async def close_position_manually(symbol: str) -> dict[str, Any] | None:
     await store.add_daily_pnl(pnl)
     await store.bump_realized(pnl, closed=True, win=pnl > 0)
     await store.set_position(symbol, is_open=False)
+    await store.record_trade_close({
+        "ts": datetime.now(UTC).isoformat(),
+        "symbol": symbol,
+        "side": position["side"],
+        "leg": "manual",
+        "reason": "manual_close",
+        "entry_price": entry,
+        "exit_price": round(price, 8),
+        "amount": amount,
+        "pnl_quote": round(pnl, 4),
+        "fee_quote": round(fee, 4),
+        "opened_at": position.get("opened_at"),
+    })
     log.info(
         "position_closed_manually",
         symbol=symbol, exit_price=price, fee_quote=round(fee, 4), pnl_quote=round(pnl, 4),

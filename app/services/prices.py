@@ -17,6 +17,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+import httpx
+
 from app.logging_config import get_logger
 
 log = get_logger("app.services.prices")
@@ -26,7 +28,20 @@ _CACHE_TTL_S = 3.0
 _client: Any | None = None
 _client_failed = False
 _cache: dict[str, tuple[float, float]] = {}  # symbol -> (price, epoch)
+_last_source: dict[str, str] = {}  # symbol -> "binance" | "ccxt"
 _exchange_id = "mexc"
+
+# Binance public REST is the primary source for crypto: one GET, no markets to
+# load, extremely reliable (and reachable from the Jakarta VPS). Map our internal
+# BASE/QUOTE symbols to Binance tickers. Non-crypto (TradFi) falls through to ccxt.
+_BINANCE_MAP = {
+    "BTC/USDT": "BTCUSDT",
+    "ETH/USDT": "ETHUSDT",
+    "SOL/USDT": "SOLUSDT",
+    "XRP/USDT": "XRPUSDT",
+    "DOGE/USDT": "DOGEUSDT",
+}
+_BINANCE_URL = "https://api.binance.com/api/v3/ticker/price"
 
 
 def configure(exchange_id: str) -> None:
@@ -79,17 +94,26 @@ async def _get_client() -> Any | None:
         return None
 
 
-async def get_price(symbol: str) -> float | None:
-    """Return the live mark price for ``symbol`` (quote units), or ``None``."""
-    now = time.time()
-    hit = _cache.get(symbol)
-    if hit is not None and now - hit[1] < _CACHE_TTL_S:
-        return hit[0]
+async def _binance_price(symbol: str) -> float | None:
+    """Fetch a crypto price from Binance public REST (or None)."""
+    ticker = _BINANCE_MAP.get(symbol)
+    if ticker is None:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(_BINANCE_URL, params={"symbol": ticker})
+            resp.raise_for_status()
+            price = resp.json().get("price")
+            return float(price) if price else None
+    except Exception as exc:  # noqa: BLE001 - fall through to ccxt / mock
+        log.debug("binance_price_failed", symbol=symbol, error=str(exc))
+        return None
 
+
+async def _ccxt_price(symbol: str) -> float | None:
     client = await _get_client()
     if client is None:
         return None
-
     for cand in _symbol_candidates(symbol):
         try:
             ticker = await client.fetch_ticker(cand)
@@ -97,10 +121,38 @@ async def get_price(symbol: str) -> float | None:
             continue
         price = ticker.get("last") or ticker.get("close")
         if price:
-            _cache[symbol] = (float(price), now)
             return float(price)
-    log.debug("price_unresolved", symbol=symbol)
     return None
+
+
+async def get_price(symbol: str) -> float | None:
+    """Return the live mark price for ``symbol`` (quote units), or ``None``.
+
+    Crypto resolves via Binance REST first (fast, reliable); everything else
+    (and any Binance miss) via ccxt on the configured exchange.
+    """
+    now = time.time()
+    hit = _cache.get(symbol)
+    if hit is not None and now - hit[1] < _CACHE_TTL_S:
+        return hit[0]
+
+    price = await _binance_price(symbol)
+    source = "binance"
+    if price is None:
+        price = await _ccxt_price(symbol)
+        source = "ccxt"
+
+    if price is not None and price > 0:
+        _cache[symbol] = (price, now)
+        _last_source[symbol] = source
+        return price
+    log.warning("price_unresolved", symbol=symbol)
+    return None
+
+
+def last_source(symbol: str) -> str:
+    """Which provider last resolved ``symbol`` ('binance'/'ccxt'/'mock')."""
+    return _last_source.get(symbol, "mock")
 
 
 async def warm() -> None:

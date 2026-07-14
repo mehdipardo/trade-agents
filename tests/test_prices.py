@@ -23,7 +23,13 @@ class _FakeClient:
 
 
 @pytest.fixture(autouse=True)
-def _reset() -> None:
+def _reset(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Stub the Binance HTTP path off by default so ccxt-path tests are hermetic
+    # (no network). Individual tests re-patch it to exercise the Binance path.
+    async def _no_binance(symbol: str):  # noqa: ANN202
+        return None
+
+    monkeypatch.setattr(prices, "_binance_price", _no_binance)
     prices.reset_state()
     prices.set_client(None)
     yield
@@ -63,3 +69,34 @@ async def test_price_is_cached_within_ttl() -> None:
     await prices.get_price("BTC/USDT")
     # Second call served from cache -> only the first hit the client.
     assert client.calls == 1
+
+
+async def test_binance_is_tried_first_for_crypto(monkeypatch) -> None:
+    async def _fake_binance(symbol: str):
+        return 62345.0 if symbol == "BTC/USDT" else None
+
+    monkeypatch.setattr(prices, "_binance_price", _fake_binance)
+    # ccxt should never be consulted when Binance resolves.
+    prices.set_client(_FakeClient({}))
+    assert await prices.get_price("BTC/USDT") == 62345.0
+    assert prices.last_source("BTC/USDT") == "binance"
+
+
+async def test_falls_back_to_ccxt_when_binance_misses() -> None:
+    # NVDA isn't a Binance crypto symbol -> ccxt path.
+    prices.set_client(_FakeClient({"NVDA/USDT": 180.0}))
+    assert await prices.get_price("NVDA/USDT") == 180.0
+    assert prices.last_source("NVDA/USDT") == "ccxt"
+
+
+async def test_trade_ledger_records_and_reads() -> None:
+    from app.services.store import InMemoryStore, set_store
+    set_store(InMemoryStore())
+    from app.services.store import get_store
+    s = get_store()
+    assert await s.closed_trades() == []
+    await s.record_trade_close({"symbol": "BTC/USDT", "leg": "main_tp", "pnl_quote": 14.7})
+    await s.record_trade_close({"symbol": "BTC/USDT", "leg": "runner", "pnl_quote": -0.05})
+    trades = await s.closed_trades()
+    assert len(trades) == 2
+    assert trades[0]["leg"] == "runner"  # newest first

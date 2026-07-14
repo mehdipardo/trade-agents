@@ -78,6 +78,10 @@ class Store(Protocol):
     async def record_critique(self, entry: dict) -> None: ...
     async def critiques(self, limit: int = 20) -> list[dict]: ...
 
+    # Closed-trade ledger (entry/exit/reason/pnl) for the trade history panel
+    async def record_trade_close(self, entry: dict) -> None: ...
+    async def closed_trades(self, limit: int = 50) -> list[dict]: ...
+
     async def snapshot(self) -> dict: ...
 
 
@@ -94,6 +98,7 @@ class InMemoryStore:
         self._dedup: dict[str, float] = {}  # key -> expiry epoch
         self._history: list[dict] = []  # recent pipeline results (bounded)
         self._critiques: list[dict] = []  # SL post-mortems (bounded)
+        self._closed_trades: list[dict] = []  # trade ledger (bounded)
         self._strategy_id: str | None = None
         self._source_configs: dict[str, dict[str, str]] = {}
         self._realized_total = 0.0  # lifetime realized PnL (net of fees)
@@ -243,6 +248,13 @@ class InMemoryStore:
 
     async def critiques(self, limit: int = 20) -> list[dict]:
         return list(reversed(self._critiques[-limit:]))
+
+    async def record_trade_close(self, entry: dict) -> None:
+        self._closed_trades.append(entry)
+        del self._closed_trades[:-100]
+
+    async def closed_trades(self, limit: int = 50) -> list[dict]:
+        return list(reversed(self._closed_trades[-limit:]))
 
     async def snapshot(self) -> dict:
         return {
@@ -425,6 +437,14 @@ class RedisStore:
 
     async def critiques(self, limit: int = 20) -> list[dict]:
         raw = await self._r.lrange("fst:critiques", 0, limit - 1)
+        return [orjson.loads(v) for v in raw]
+
+    async def record_trade_close(self, entry: dict) -> None:
+        await self._r.lpush("fst:trades", orjson.dumps(entry).decode())
+        await self._r.ltrim("fst:trades", 0, 99)
+
+    async def closed_trades(self, limit: int = 50) -> list[dict]:
+        raw = await self._r.lrange("fst:trades", 0, limit - 1)
         return [orjson.loads(v) for v in raw]
 
     async def snapshot(self) -> dict:

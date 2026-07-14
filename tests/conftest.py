@@ -15,6 +15,8 @@ def _safe_defaults(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("PAPER_TRADING", "true")
     monkeypatch.setenv("EXCHANGE_SANDBOX", "true")
     monkeypatch.setenv("APP_ENV", "test")
+    # Keep tests hermetic: no live price network calls (executor uses mock refs).
+    monkeypatch.setenv("USE_LIVE_PRICES", "false")
 
     from app.config import get_settings
     from app.services.exchange import set_exchange
