@@ -25,6 +25,36 @@ def _utc_day() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
+def _is_mock_exit(entry: dict, mock_prices: dict[str, float]) -> bool:
+    """True when a journal row's exit_price equals its symbol's mock reference.
+
+    That is the exact signature of a false SL/TP fabricated by the (now fixed)
+    mock-price fallback: the monitor marked at a static mock (e.g. BTC=60000)
+    and booked a stop there. A real exit lands on the live mark, which never
+    equals the mock constant, so this match is precise.
+    """
+    symbol, exit_price = entry.get("symbol"), entry.get("exit_price")
+    if symbol is None or exit_price is None:
+        return False
+    mock = mock_prices.get(symbol)
+    if mock is None:
+        return False
+    return abs(float(exit_price) - float(mock)) <= max(1e-6, abs(float(mock)) * 1e-6)
+
+
+def _counter_reversal(removed_trades: list[dict]) -> tuple[float, int, int]:
+    """(realized, closed, wins) to subtract for a set of purged closed-trade rows.
+
+    Every close (partial or full) added its net PnL to the realized total; only
+    full closes (leg ``full``/``runner``) incremented the closed-trade and win
+    counters. Mirror that here so ``performance()`` stays consistent post-purge.
+    """
+    realized = sum(float(e.get("pnl_quote") or 0.0) for e in removed_trades)
+    full = [e for e in removed_trades if e.get("leg") in ("full", "runner")]
+    wins = sum(1 for e in full if float(e.get("pnl_quote") or 0.0) > 0)
+    return realized, len(full), wins
+
+
 class Store(Protocol):
     """Async state-store interface."""
 
@@ -81,6 +111,9 @@ class Store(Protocol):
     # Closed-trade ledger (entry/exit/reason/pnl) for the trade history panel
     async def record_trade_close(self, entry: dict) -> None: ...
     async def closed_trades(self, limit: int = 50) -> list[dict]: ...
+
+    # Maintenance: drop journal rows fabricated by the (fixed) mock-price bug.
+    async def purge_mock_journal(self, mock_prices: dict[str, float]) -> dict: ...
 
     async def snapshot(self) -> dict: ...
 
@@ -255,6 +288,23 @@ class InMemoryStore:
 
     async def closed_trades(self, limit: int = 50) -> list[dict]:
         return list(reversed(self._closed_trades[-limit:]))
+
+    async def purge_mock_journal(self, mock_prices: dict[str, float]) -> dict:
+        removed_c = [c for c in self._critiques if _is_mock_exit(c, mock_prices)]
+        removed_t = [t for t in self._closed_trades if _is_mock_exit(t, mock_prices)]
+        self._critiques = [c for c in self._critiques if c not in removed_c]
+        self._closed_trades = [t for t in self._closed_trades if t not in removed_t]
+        realized, closed, wins = _counter_reversal(removed_t)
+        self._realized_total -= realized
+        self._closed_count = max(0, self._closed_count - closed)
+        self._wins = max(0, self._wins - wins)
+        return {
+            "critiques_removed": len(removed_c),
+            "trades_removed": len(removed_t),
+            "realized_reversed": round(realized, 4),
+            "closed_reversed": closed,
+            "wins_reversed": wins,
+        }
 
     async def snapshot(self) -> dict:
         return {
@@ -440,12 +490,49 @@ class RedisStore:
         return [orjson.loads(v) for v in raw]
 
     async def record_trade_close(self, entry: dict) -> None:
-        await self._r.lpush("fst:trades", orjson.dumps(entry).decode())
-        await self._r.ltrim("fst:trades", 0, 99)
+        # NB: distinct key from TRADES_ZSET ("fst:trades"). That key is a sorted
+        # set (hourly trade-rate counter); reusing it here as a list would raise
+        # WRONGTYPE and silently drop every closed-trade row on Redis.
+        await self._r.lpush("fst:closed_trades", orjson.dumps(entry).decode())
+        await self._r.ltrim("fst:closed_trades", 0, 99)
 
     async def closed_trades(self, limit: int = 50) -> list[dict]:
-        raw = await self._r.lrange("fst:trades", 0, limit - 1)
+        raw = await self._r.lrange("fst:closed_trades", 0, limit - 1)
         return [orjson.loads(v) for v in raw]
+
+    async def _rewrite_list(self, key: str, kept: list[dict]) -> None:
+        """Replace a JSON list key with ``kept`` (newest-first order preserved)."""
+        await self._r.delete(key)
+        if kept:
+            await self._r.rpush(key, *[orjson.dumps(e).decode() for e in kept])
+
+    async def purge_mock_journal(self, mock_prices: dict[str, float]) -> dict:
+        crit_raw = await self._r.lrange("fst:critiques", 0, -1)
+        crit = [orjson.loads(v) for v in crit_raw]
+        kept_crit = [c for c in crit if not _is_mock_exit(c, mock_prices)]
+
+        trade_raw = await self._r.lrange("fst:closed_trades", 0, -1)
+        trades = [orjson.loads(v) for v in trade_raw]
+        removed_t = [t for t in trades if _is_mock_exit(t, mock_prices)]
+        kept_t = [t for t in trades if not _is_mock_exit(t, mock_prices)]
+        realized, closed, wins = _counter_reversal(removed_t)
+
+        if len(kept_crit) != len(crit):
+            await self._rewrite_list("fst:critiques", kept_crit)
+        if removed_t:
+            await self._rewrite_list("fst:closed_trades", kept_t)
+            if realized:
+                await self._r.incrbyfloat("fst:realized_total", -realized)
+            for k, n in (("fst:closed_count", closed), ("fst:wins", wins)):
+                if n:
+                    await self._r.incrby(k, -n)
+        return {
+            "critiques_removed": len(crit) - len(kept_crit),
+            "trades_removed": len(removed_t),
+            "realized_reversed": round(realized, 4),
+            "closed_reversed": closed,
+            "wins_reversed": wins,
+        }
 
     async def snapshot(self) -> dict:
         reason = await self._r.get(self.KILL_REASON_KEY)
