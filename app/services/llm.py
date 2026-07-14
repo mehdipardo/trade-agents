@@ -355,6 +355,24 @@ def _post_validate(signal: Signal, settings: Settings) -> Signal:
     return signal
 
 
+async def _recent_lessons(limit: int = 8) -> str:
+    """Fetch recent stop-loss post-mortems and render them for the system prompt.
+
+    Best-effort: any store failure yields an empty block so a missing/erroring
+    ledger never blocks a live decision.
+    """
+    from app.prompts.analyst import build_lessons_block
+
+    try:
+        from app.services.store import get_store
+
+        records = await get_store().critiques(limit)
+    except Exception as exc:  # noqa: BLE001 - lessons are enrichment, never critical
+        log.warning("lessons_fetch_failed", error=str(exc))
+        return ""
+    return build_lessons_block(records)
+
+
 async def _analyze_with_llm(
     event: NewsEvent, settings: Settings, structured_llm: Any, prompt_version: str | None = None
 ) -> Signal:
@@ -364,6 +382,11 @@ async def _analyze_with_llm(
     system = build_system_prompt(
         settings.asset_whitelist_set, settings.confidence_threshold, prompt_version
     )
+    # Close the learning loop: feed recent stop-loss post-mortems back into the
+    # decision so the analyst conditions each new call on its own past mistakes.
+    lessons = await _recent_lessons()
+    if lessons:
+        system = f"{system}\n\n{lessons}"
     messages: list[Any] = [
         SystemMessage(content=system),
         HumanMessage(content=build_user_message(event)),

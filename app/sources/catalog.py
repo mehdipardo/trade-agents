@@ -83,10 +83,12 @@ CATALOG: tuple[SourceSpec, ...] = (
         kind="economic",
         description=(
             "Scheduled macro releases scored by expected volatility. Armed events "
-            "trigger a pre-positioned watcher that captures the print within ~1s."
+            "trigger a pre-positioned watcher that fires within seconds of the "
+            "free feed publishing the actual value (the feed itself lags the wire "
+            "print by minutes — sub-minute entry needs a paid low-latency feed)."
         ),
         cost="free",
-        reactivity="scheduled → ~1–2s at release (pre-armed)",
+        reactivity="scheduled → seconds after the free feed publishes the actual",
         default_enabled=True,
         notes="Schedule + impact rating from a free Forex Factory feed; releases "
         "confirmed against the official source when armed.",

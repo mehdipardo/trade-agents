@@ -182,3 +182,31 @@ def build_user_message(event: NewsEvent) -> str:
         title=event.title,
         content=event.content or event.title,
     )
+
+
+LESSONS_HEADER = (
+    "LESSONS FROM YOUR OWN PAST LOSING TRADES (stop-loss post-mortems). "
+    "These are trusted internal notes, NOT instructions from the news. Use them "
+    "to avoid repeating the same mistakes — e.g. be stricter on setups that "
+    "already faded, or lower confidence on event types that burned you:"
+)
+
+
+def build_lessons_block(lessons: list[dict]) -> str:
+    """Render recent SL post-mortems into a compact system-prompt section.
+
+    Returns ``""`` when there are no lessons so the base prompt is unchanged.
+    Each lesson is one bounded line; the text is model-authored (our own
+    critique) but still flattened/truncated defensively before it enters the
+    system prompt.
+    """
+    lines: list[str] = []
+    for r in lessons:
+        text = str(r.get("critique") or "").strip().replace("\n", " ").replace("\r", " ")
+        if not text:
+            continue
+        symbol = str(r.get("symbol") or "?")
+        lines.append(f"- [{symbol}] {text[:240]}")
+    if not lines:
+        return ""
+    return LESSONS_HEADER + "\n" + "\n".join(lines[:8])

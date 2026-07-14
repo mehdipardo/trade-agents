@@ -23,13 +23,24 @@ from app.sources.economic_calendar import CalendarEvent, cache_events, fetch_cal
 log = get_logger("app.sources.watcher")
 
 LEAD_S = 30  # start watching this long before the scheduled time
-TRAIL_S = 600  # keep watching this long after (in case of delay)
+# Keep watching well past the scheduled time. The free Forex Factory feed does
+# not populate an event's `actual` value the instant the print hits the wire —
+# it can lag by many minutes. A short trailing window (10 min) let a
+# late-populating actual escape the fast pre-armed path and only reach us later
+# via the slow general RSS poll (a late, chased entry). 30 min covers the feed's
+# realistic latency so the fast path wins the race.
+TRAIL_S = 1800  # keep watching this long after the scheduled time
 REFRESH_S = 900  # re-fetch and re-arm every 15 minutes
+# The feed never updates sub-second, so refetching the calendar every 2s over a
+# 30-min window is wasteful and rude to a free feed. Throttle the release
+# refetch to at most once per this interval regardless of the loop tick.
+RELEASE_FETCH_MIN_INTERVAL_S = 8.0
 AUTO_ARM_MIN_VOL = 3  # arm every event with Medium+ volatility (3 = Medium, 5 = High)
 
 # Process-local armed state: event_id -> CalendarEvent, plus already-emitted ids.
 _armed: dict[str, CalendarEvent] = {}
 _emitted: set[str] = set()
+_last_release_fetch: float = 0.0
 
 
 def arm(event: CalendarEvent) -> None:
@@ -50,8 +61,10 @@ def is_armed(event_id: str) -> bool:
 
 def reset_state() -> None:
     """Reset armed/emitted state (used by tests)."""
+    global _last_release_fetch
     _armed.clear()
     _emitted.clear()
+    _last_release_fetch = 0.0
 
 
 def in_watch_window(
@@ -90,10 +103,17 @@ def build_release_event(event: CalendarEvent) -> NewsEvent:
 
 
 async def _poll_once(queue: asyncio.Queue[NewsEvent], calendar_url: str) -> None:
+    global _last_release_fetch
     now = datetime.now(UTC)
     active = [e for e in _armed.values() if in_watch_window(e.when, now)]
     if not active:
         return
+    # Throttle: the feed never updates sub-second, so cap the refetch rate even
+    # though the loop ticks faster (keeps the long watch window cheap/polite).
+    now_mono = time.monotonic()
+    if now_mono - _last_release_fetch < RELEASE_FETCH_MIN_INTERVAL_S:
+        return
+    _last_release_fetch = now_mono
     # Re-fetch to pick up freshly-published actuals for the armed events.
     fresh = {e.id: e for e in await fetch_calendar(calendar_url)}
     for armed_event in active:

@@ -135,6 +135,7 @@ async def test_armed_release_flows_through_pipeline() -> None:
 
 
 async def test_poll_once_emits_when_released(monkeypatch: pytest.MonkeyPatch) -> None:
+    watcher.reset_state()  # also clears the release-fetch throttle
     now = datetime.now(UTC)
     armed_ev = CalendarEvent(id="cpi", title="US CPI", when=now, impact="High", volatility=5)
     watcher.arm(armed_ev)
@@ -152,6 +153,33 @@ async def test_poll_once_emits_when_released(monkeypatch: pytest.MonkeyPatch) ->
     emitted = queue.get_nowait()
     assert emitted.source == "economic"
     assert not watcher.is_armed("cpi")  # disarmed after emit
+
+
+async def test_poll_once_throttles_refetch(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A tight loop must not hammer the free feed: back-to-back polls within the
+    # throttle window trigger at most one calendar fetch.
+    watcher.reset_state()
+    now = datetime.now(UTC)
+    watcher.arm(CalendarEvent(id="nfp", title="NFP", when=now, impact="High", volatility=5))
+
+    calls = 0
+
+    async def fake_fetch(url: str):  # noqa: ANN001
+        nonlocal calls
+        calls += 1
+        return []  # no actual yet -> nothing emitted, but a fetch happened
+
+    monkeypatch.setattr(watcher, "fetch_calendar", fake_fetch)
+    queue: asyncio.Queue = asyncio.Queue()
+    await watcher._poll_once(queue, "http://x")
+    await watcher._poll_once(queue, "http://x")  # within RELEASE_FETCH_MIN_INTERVAL_S
+    assert calls == 1  # second call short-circuited by the throttle
+
+
+def test_trail_window_covers_feed_latency() -> None:
+    # The free feed can publish an actual many minutes late; the watch window
+    # must still be open then so the fast pre-armed path catches it.
+    assert watcher.TRAIL_S >= 1800
 
 
 async def test_refresh_and_auto_arm_only_arms_medium_and_higher(
