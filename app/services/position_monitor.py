@@ -109,16 +109,20 @@ async def _current_price(symbol: str) -> float | None:
         except Exception as exc:  # noqa: BLE001
             log.warning("price_poll_failed", symbol=symbol, error=str(exc))
             return None
-    # Offline: mark against REAL public prices so SL/TP actually trigger.
     from app.config import get_settings
 
+    # Live mode: mark against REAL prices ONLY. If a price is momentarily
+    # unavailable, return None so the caller SKIPS this poll — never fall back to
+    # a static mock, which would fabricate a huge move and fire a false SL/TP.
     if get_settings().use_live_prices:
         from app.services.prices import get_price
 
         live = await get_price(symbol)
         if live is not None and live > 0:
             return live
-    # Last resort: a static mock reference (never triggers SL/TP).
+        log.warning("price_unavailable_skip_poll", symbol=symbol)
+        return None
+    # Offline/test mode only: a static mock reference (never triggers SL/TP).
     from app.graph.nodes.executor import _MOCK_PRICES
 
     return _MOCK_PRICES.get(symbol)

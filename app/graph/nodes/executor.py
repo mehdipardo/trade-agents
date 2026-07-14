@@ -151,14 +151,16 @@ async def _offline_fill(state: TradingState) -> dict[str, Any]:
     t0 = perf_counter()
     event, signal, risk = state["event"], state["signal"], state["risk"]
     symbol = signal.asset  # type: ignore[union-attr]
+    settings = get_settings()
     price, price_source = await _offline_price(symbol)
-    if price_source == "mock":
-        # Filling at a mock price produces a meaningless lifecycle (SL/TP fire
-        # against a static reference). Surface it loudly.
-        log.warning("paper_fill_mock_price", symbol=symbol, price=price)
+    # In live mode, refuse to open at a fabricated mock price — a bad entry
+    # corrupts the whole SL/TP lifecycle (the "-$44 stop at 60000" bug). Skip
+    # the trade instead; the next matching signal can retry once prices recover.
+    if price_source == "mock" and settings.use_live_prices:
+        log.warning("paper_fill_skipped_no_live_price", symbol=symbol)
+        return {"status": "failed", "error": f"no live price for {symbol}; skipped"}
     amount = round(risk.position_size_quote / price, 8)  # type: ignore[union-attr]
     side = risk.side or "buy"  # type: ignore[union-attr]
-    settings = get_settings()
 
     order = OrderResult(
         order_id=f"paper-{event.id[:8]}",

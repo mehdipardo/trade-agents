@@ -7,8 +7,13 @@
 services:
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # Persist to disk (AOF) so history / positions / PnL survive restarts and
+    # rebuilds. Without this the whole state lived in RAM and any container
+    # restart wiped it.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     restart: unless-stopped
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -46,5 +51,6 @@ services:
       - app
 
 volumes:
+  redis_data:
   caddy_data:
   caddy_config:
