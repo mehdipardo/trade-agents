@@ -111,11 +111,18 @@ CATALOG: tuple[SourceSpec, ...] = (
         config_fields=(
             ConfigField(
                 name="truth_social_urls",
-                label="Account statuses feeds (watchlist)",
-                placeholder="https://truthsocial.com/api/v1/accounts/<id>/statuses, "
-                "https://.../accounts/<id2>/statuses",
-                help="Comma/newline-separated statuses endpoints for the accounts to "
-                "watch (e.g. the 10 most influential). Falls back to a single URL.",
+                label="Accounts watchlist (handles or URLs)",
+                placeholder="@realDonaldTrump, @DonaldJTrumpJr, @dbongino, @kashpatel",
+                help="Comma/newline-separated handles (resolved automatically) or full "
+                "statuses URLs — e.g. the 10 most influential accounts. Falls back to "
+                "the single URL below.",
+            ),
+            ConfigField(
+                name="truth_social_token",
+                label="API bearer token (optional)",
+                placeholder="eyJ… (leave blank to try unauthenticated / a mirror)",
+                help="Truth Social's API is Cloudflare/auth-gated; a token makes polling "
+                "reliable. Set via env, never commit it.",
             ),
             ConfigField(
                 name="truth_social_url",

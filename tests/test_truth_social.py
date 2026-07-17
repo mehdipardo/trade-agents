@@ -102,3 +102,47 @@ async def test_watchlist_shares_seen_set_across_accounts(
     assert await poll_once(queue, "acct-A") == 1  # post 100
     assert await poll_once(queue, "acct-B") == 1  # only 200; 100 already seen
     assert queue.qsize() == 2
+
+
+async def test_resolve_entries_handles_urls_and_handles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_lookup(handle: str, base: str):  # noqa: ANN001
+        key = handle.lstrip("@")
+        return {"realDonaldTrump": "107780257626128497", "dbongino": "12345"}.get(key)
+
+    monkeypatch.setattr(truth_social, "_lookup_account_id", fake_lookup)
+    entries = [
+        "@realDonaldTrump",                              # handle -> resolved
+        "https://mirror.example/accounts/9/statuses",    # URL -> passthrough
+        "@dbongino",                                     # handle -> resolved
+        "@ghost_unknown",                                # unresolved -> dropped
+    ]
+    urls = await truth_social.resolve_entries(entries, base="https://truthsocial.com")
+    assert urls == [
+        "https://truthsocial.com/api/v1/accounts/107780257626128497/statuses",
+        "https://mirror.example/accounts/9/statuses",
+        "https://truthsocial.com/api/v1/accounts/12345/statuses",
+    ]
+
+
+def test_auth_headers_include_bearer_when_token_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.config as config
+
+    class _S:
+        truth_social_token = "tok"
+
+    monkeypatch.setattr(config, "get_settings", lambda: _S())
+    headers = truth_social._auth_headers()
+    assert headers["Authorization"] == "Bearer tok"
+    assert headers["User-Agent"] == "flashsentiment/0.1"
+
+
+def test_auth_headers_no_bearer_without_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.config as config
+
+    class _S:
+        truth_social_token = ""
+
+    monkeypatch.setattr(config, "get_settings", lambda: _S())
+    assert "Authorization" not in truth_social._auth_headers()

@@ -29,8 +29,30 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _BREAK_RE = re.compile(r"</p>|<br\s*/?>", flags=re.IGNORECASE)
 _WS_RE = re.compile(r"[ \t]+")
 
+# Truth Social is a Mastodon fork; the public host used to resolve handles.
+DEFAULT_TS_BASE = "https://truthsocial.com"
+
 # Process-local set of post ids already emitted (avoids re-emitting on each poll).
 _seen: set[str] = set()
+
+
+def _auth_headers() -> dict[str, str]:
+    """Base request headers, plus a Bearer token when configured.
+
+    Truth Social's public API is Cloudflare/auth-gated, so unauthenticated
+    polling is often 403'd. A configured ``truth_social_token`` is sent as a
+    Bearer credential; without one we still try (some mirrors are open).
+    """
+    headers = {"User-Agent": "flashsentiment/0.1"}
+    try:
+        from app.config import get_settings
+
+        token = getattr(get_settings(), "truth_social_token", "")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+    except Exception:  # noqa: BLE001 - headers are best-effort
+        pass
+    return headers
 
 
 def reset_state() -> None:
@@ -83,13 +105,56 @@ async def fetch_statuses(url: str) -> list[dict]:
     """Fetch a statuses feed (best-effort; returns [] on failure)."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers={"User-Agent": "flashsentiment/0.1"})
+            resp = await client.get(url, headers=_auth_headers())
             resp.raise_for_status()
             data = resp.json()
     except Exception as exc:  # noqa: BLE001 - never break the app on a feed error
         log.warning("truth_fetch_failed", url=url, error=str(exc))
         return []
     return data if isinstance(data, list) else data.get("statuses", data.get("data", []))
+
+
+def _is_url(entry: str) -> bool:
+    return entry.startswith(("http://", "https://"))
+
+
+async def _lookup_account_id(handle: str, base: str) -> str | None:
+    """Resolve a Truth Social handle to its numeric account id (Mastodon lookup)."""
+    handle = handle.lstrip("@").strip()
+    if not handle:
+        return None
+    url = f"{base}/api/v1/accounts/lookup?acct={handle}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=_auth_headers())
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:  # noqa: BLE001 - resolution is best-effort
+        log.warning("truth_lookup_failed", handle=handle, error=str(exc))
+        return None
+    acct_id = data.get("id") if isinstance(data, dict) else None
+    return str(acct_id) if acct_id else None
+
+
+async def resolve_entries(entries: list[str], base: str = DEFAULT_TS_BASE) -> list[str]:
+    """Turn watchlist entries into concrete statuses URLs.
+
+    An entry may be a full statuses URL (used verbatim) or a bare handle like
+    ``@realDonaldTrump`` (resolved to ``.../accounts/<id>/statuses``). Entries
+    that can't be resolved are dropped with a warning so one bad handle never
+    sinks the rest of the watchlist.
+    """
+    urls: list[str] = []
+    for entry in entries:
+        if _is_url(entry):
+            urls.append(entry)
+            continue
+        acct_id = await _lookup_account_id(entry, base)
+        if acct_id:
+            urls.append(f"{base}/api/v1/accounts/{acct_id}/statuses")
+        else:
+            log.warning("truth_entry_unresolved", entry=entry)
+    return urls
 
 
 async def poll_once(queue: asyncio.Queue[NewsEvent], url: str) -> int:
@@ -124,18 +189,28 @@ async def _prime_seen(url: str) -> None:
 
 
 async def poll_accounts_loop(
-    queue: asyncio.Queue[NewsEvent], urls: list[str], poll_interval_s: float = 10.0
+    queue: asyncio.Queue[NewsEvent], entries: list[str], poll_interval_s: float = 10.0
 ) -> None:
-    """Poll a *watchlist* of account feeds forever, enqueueing new posts.
+    """Poll a *watchlist* of accounts forever, enqueueing new posts.
 
-    One shared seen-set spans all accounts (post ids are globally unique), so a
-    boosted/quoted post seen on two feeds still fires once. Each account is
-    fetched every tick; a single account failing never stops the others.
+    ``entries`` are handles (``@realDonaldTrump``) and/or full statuses URLs;
+    they are resolved to concrete feed URLs on startup, retrying each tick while
+    none resolve (so recovering from a transient lookup/auth failure needs no
+    restart). One shared seen-set spans all accounts (post ids are globally
+    unique), so a cross-posted status still fires once, and a single account
+    failing never stops the others.
     """
-    log.info("truth_poller_started", accounts=len(urls), poll_interval_s=poll_interval_s)
+    log.info("truth_poller_started", accounts=len(entries), poll_interval_s=poll_interval_s)
+    urls: list[str] = []
     first = True
     try:
         while True:
+            if not urls:
+                urls = await resolve_entries(entries)
+                if urls:
+                    first = True  # prime the freshly-resolved feeds
+                else:
+                    log.warning("truth_no_resolvable_accounts", entries=len(entries))
             for url in urls:
                 try:
                     if first:
