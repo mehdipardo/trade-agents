@@ -9,6 +9,7 @@ import pytest
 from app.sources import truth_social
 from app.sources.truth_social import (
     new_statuses,
+    parse_account_urls,
     parse_status,
     poll_once,
     strip_html,
@@ -73,3 +74,31 @@ async def test_poll_once_emits_new_only(monkeypatch: pytest.MonkeyPatch) -> None
     # Second poll: nothing new.
     n2 = await poll_once(queue, "http://x")
     assert n2 == 0
+
+
+def test_parse_account_urls_splits_comma_and_newline() -> None:
+    assert parse_account_urls("a, b\nc ,, ") == ["a", "b", "c"]
+    assert parse_account_urls("") == []
+    assert parse_account_urls("  https://x/statuses  ") == ["https://x/statuses"]
+
+
+async def test_watchlist_shares_seen_set_across_accounts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Monitoring several accounts: a post already emitted from one feed must not
+    # re-fire if it also surfaces on another feed (one shared seen-set).
+    truth_social.reset_state()
+    feeds = {
+        "acct-A": [_status("100", "Trump on tariffs")],
+        "acct-B": [_status("100", "Trump on tariffs"), _status("200", "Vance on rates")],
+    }
+
+    async def fake_fetch(url: str):  # noqa: ANN001
+        return feeds[url]
+
+    monkeypatch.setattr(truth_social, "fetch_statuses", fake_fetch)
+    queue: asyncio.Queue = asyncio.Queue()
+
+    assert await poll_once(queue, "acct-A") == 1  # post 100
+    assert await poll_once(queue, "acct-B") == 1  # only 200; 100 already seen
+    assert queue.qsize() == 2

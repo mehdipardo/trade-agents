@@ -111,26 +111,48 @@ async def poll_once(queue: asyncio.Queue[NewsEvent], url: str) -> int:
     return emitted
 
 
-async def poll_loop(
-    queue: asyncio.Queue[NewsEvent], url: str, poll_interval_s: float = 10.0
+def parse_account_urls(raw: str) -> list[str]:
+    """Split a comma/newline-separated list of account status feeds."""
+    return [u.strip() for u in re.split(r"[,\n]", raw or "") if u.strip()]
+
+
+async def _prime_seen(url: str) -> None:
+    """Seed the seen-set from an account's current feed (no replay on startup)."""
+    for s in await fetch_statuses(url):
+        if s.get("id"):
+            _seen.add(str(s["id"]))
+
+
+async def poll_accounts_loop(
+    queue: asyncio.Queue[NewsEvent], urls: list[str], poll_interval_s: float = 10.0
 ) -> None:
-    """Poll the statuses feed forever, enqueueing new posts."""
-    log.info("truth_poller_started", poll_interval_s=poll_interval_s)
-    # Prime the seen-set on first pass so we don't replay history on startup.
+    """Poll a *watchlist* of account feeds forever, enqueueing new posts.
+
+    One shared seen-set spans all accounts (post ids are globally unique), so a
+    boosted/quoted post seen on two feeds still fires once. Each account is
+    fetched every tick; a single account failing never stops the others.
+    """
+    log.info("truth_poller_started", accounts=len(urls), poll_interval_s=poll_interval_s)
     first = True
     try:
         while True:
-            try:
-                if first:
-                    for s in await fetch_statuses(url):
-                        if s.get("id"):
-                            _seen.add(str(s["id"]))
-                    first = False
-                else:
-                    await poll_once(queue, url)
-            except Exception as exc:  # noqa: BLE001 - never kill the poller
-                log.error("truth_poller_error", error=str(exc))
+            for url in urls:
+                try:
+                    if first:
+                        await _prime_seen(url)
+                    else:
+                        await poll_once(queue, url)
+                except Exception as exc:  # noqa: BLE001 - never kill the poller
+                    log.error("truth_poller_error", url=url, error=str(exc))
+            first = False
             await asyncio.sleep(poll_interval_s)
     except asyncio.CancelledError:
         log.info("truth_poller_stopped")
         raise
+
+
+async def poll_loop(
+    queue: asyncio.Queue[NewsEvent], url: str, poll_interval_s: float = 10.0
+) -> None:
+    """Backward-compatible single-account wrapper over ``poll_accounts_loop``."""
+    await poll_accounts_loop(queue, [url], poll_interval_s)

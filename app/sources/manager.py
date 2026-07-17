@@ -150,12 +150,18 @@ def _econ_calendar(
 def _trump_truthsocial(
     queue: asyncio.Queue[NewsEvent], settings: MergedSettings
 ) -> Coroutine[Any, Any, None] | None:
-    url = getattr(settings, "truth_social_url", "")
-    if not url:
-        return None
-    from app.sources.truth_social import poll_loop
+    from app.sources.truth_social import parse_account_urls, poll_accounts_loop
 
-    return poll_loop(queue, url, int(getattr(settings, "truth_social_poll_interval_s", 10)))
+    # Prefer the multi-account watchlist; fall back to the single legacy URL.
+    urls = parse_account_urls(getattr(settings, "truth_social_urls", ""))
+    if not urls:
+        single = getattr(settings, "truth_social_url", "")
+        urls = [single] if single else []
+    if not urls:
+        return None
+    return poll_accounts_loop(
+        queue, urls, int(getattr(settings, "truth_social_poll_interval_s", 10))
+    )
 
 
 def _congress_bills(

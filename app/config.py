@@ -124,6 +124,10 @@ class Settings(BaseSettings):
     econ_calendar_url: str = ""
     # Trump / Truth Social poller (opt-in: set a statuses feed URL to start it).
     truth_social_url: str = ""
+    # Watchlist: comma/newline-separated account status feeds (the "10 most
+    # influential accounts"). Falls back to the single truth_social_url. Each is
+    # a Mastodon-shaped .../api/v1/accounts/<id>/statuses endpoint or mirror.
+    truth_social_urls: str = ""
     truth_social_poll_interval_s: int = Field(default=10, ge=2)
     # Congress.gov bill tracker (opt-in: needs a free API key + tracked bills).
     congress_api_key: str = ""

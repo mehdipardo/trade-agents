@@ -96,22 +96,32 @@ CATALOG: tuple[SourceSpec, ...] = (
     ),
     SourceSpec(
         id="trump_truthsocial",
-        name="Trump — Truth Social (live)",
+        name="Trump — Truth Social (live watchlist)",
         kind="social",
-        description="Live posts from a prominent public account, polled frequently.",
+        description="Live posts from a watchlist of prominent public accounts, polled "
+        "frequently.",
         cost="free",
-        reactivity="~seconds (fragile)",
+        reactivity="~seconds (poll floor — not millisecond/HFT)",
         default_enabled=False,
-        notes="No official API: direct polling of the public statuses endpoint is "
+        notes="No official API: direct polling of the public statuses endpoints is "
         "fastest but ToS-gray and can break; a mirror archive (~5 min) is the "
-        "robust fallback.",
+        "robust fallback. Our latency floor is the poll interval (seconds), not the "
+        "paid millisecond 'Truth API' sold to HFT desks — we react on meaning, not speed.",
         tags=("social", "high-impact"),
         config_fields=(
             ConfigField(
+                name="truth_social_urls",
+                label="Account statuses feeds (watchlist)",
+                placeholder="https://truthsocial.com/api/v1/accounts/<id>/statuses, "
+                "https://.../accounts/<id2>/statuses",
+                help="Comma/newline-separated statuses endpoints for the accounts to "
+                "watch (e.g. the 10 most influential). Falls back to a single URL.",
+            ),
+            ConfigField(
                 name="truth_social_url",
-                label="Statuses feed URL",
+                label="Statuses feed URL (single, legacy)",
                 placeholder="https://truthsocial.com/api/v1/accounts/<id>/statuses",
-                help="Public statuses endpoint or a mirror. Paste the URL and hit Save.",
+                help="Single-account fallback if the watchlist above is empty.",
             ),
         ),
     ),
