@@ -124,6 +124,8 @@
   .pos-table td{padding:12px 18px;border-bottom:1px solid var(--line)}
   .pos-table tr:last-child td{border-bottom:0}
   .pos-table tr:hover td{background:var(--bg-2)}
+  .news-ref{margin-top:3px;font-family:var(--sans);font-size:10.5px;line-height:1.3;max-width:220px;white-space:normal}
+  .news-ref a{color:var(--ink-2)} .news-ref a:hover{color:var(--accent)}
   .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:4px;font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-family:var(--sans)}
   .badge.long{color:var(--up);background:var(--up-dim)} .badge.short{color:var(--down);background:var(--down-dim)}
   .badge.runner{color:var(--accent);background:var(--accent-dim)} .badge.lev{color:var(--amber);background:var(--amber-dim)}
@@ -201,7 +203,7 @@
         <div class="value" id="mEquity">—</div>
         <div class="sub">
           <span class="delta flat" id="mEquityDelta"><span class="arrow up"></span>—</span>
-          <span class="dim">since inception</span>
+          <span class="dim" id="mEquitySub">since inception</span>
         </div>
       </div>
       <div class="stat">
@@ -253,7 +255,7 @@
         <div class="card">
           <header><h3>Open positions</h3><div class="spacer"></div><span class="h-sub"><span id="posCount">0</span> open · <span class="mono" id="posExposure">$0</span> exposure</span></header>
           <div class="body p0"><table class="pos-table"><thead><tr>
-            <th>Symbol</th><th>Side</th><th>Entry</th><th>SL</th><th>TP</th><th>Size</th><th>Tags</th><th></th>
+            <th>Symbol</th><th>Side</th><th>Entry</th><th>Mark</th><th>SL</th><th>TP</th><th>Size</th><th>uPnL</th><th>Tags</th><th></th>
           </tr></thead><tbody id="posBody"></tbody></table></div>
         </div>
 
@@ -317,6 +319,13 @@ const fmtUsd=(v,d=2)=>(v<0?'-':'')+'$'+Math.abs(v).toLocaleString('en-US',{minim
 const fmtPct=(v,d=2)=>(v>=0?'+':'')+Number(v).toFixed(d)+'%';
 const num=(v)=>v==null?'—':(+v).toLocaleString('en-US',{maximumFractionDigits:(+v)>1000?2:4});
 const clsP=v=>v>0?'up':v<0?'down':'';
+// Escape ALL untrusted strings (news titles/urls/sources) before injecting as HTML.
+const esc=(s)=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl=(u)=>{u=String(u||'');return /^https?:\/\//i.test(u)?u:'';};
+// Short local datetime for news (e.g. "07-17 17:11"); '' when unknown.
+const fmtWhen=(iso)=>{if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';const p=n=>String(n).padStart(2,'0');return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;};
+// News reference -> a compact, escaped, clickable line (link when a url exists).
+function newsLine(n){if(!n||!(n.title||n.url))return '';const when=fmtWhen(n.published_at);const src=n.source?esc(n.source):'';const meta=[when,src].filter(Boolean).join(' · ');const t=esc((n.title||'').slice(0,64));const u=safeUrl(n.url);const label=u?`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${t}</a>`:t;return `<div class="news-ref">${label}${meta?`<span class="dim"> · ${meta}</span>`:''}</div>`;}
 
 /* ---- API ---- */
 async function api(path,body,method){
@@ -443,12 +452,18 @@ async function refreshChart(){if(curAsset)await setChart(curAsset);}
 async function loadPerformance(){
   try{
     const p=await api('/api/performance');
-    $('#mEquity').textContent=fmtUsd(p.equity);
-    const d=$('#mEquityDelta'),abs=p.realized_total||0;
-    d.className='delta '+(abs>0?'up':abs<0?'down':'flat');
-    d.innerHTML=`<span class="arrow ${abs>=0?'up':'down'}"></span>${abs>=0?'+':''}${fmtUsd(abs)}`;
-    $('#mCumPct').textContent=fmtPct(p.return_pct);$('#mCumPct').className='value '+clsP(p.return_pct);
-    $('#mCumAbs').textContent=(abs>=0?'+':'')+fmtUsd(abs);$('#mCumAbs').className='mono '+clsP(abs);
+    // Exchange-style: headline equity includes live unrealized PnL and ticks with price.
+    const liveEq=p.live_equity!=null?p.live_equity:p.equity;
+    const liveAbs=liveEq-(p.starting_equity||0);
+    const uPnl=p.unrealized_pnl||0;
+    $('#mEquity').textContent=fmtUsd(liveEq);
+    const d=$('#mEquityDelta');
+    d.className='delta '+(liveAbs>0?'up':liveAbs<0?'down':'flat');
+    d.innerHTML=`<span class="arrow ${liveAbs>=0?'up':'down'}"></span>${liveAbs>=0?'+':''}${fmtUsd(liveAbs)}`;
+    $('#mEquitySub').innerHTML=p.open_positions?`since inception · uPnL <span class="${clsP(uPnl)}">${uPnl>=0?'+':''}${fmtUsd(uPnl)}</span>`:'since inception';
+    const cumPct=p.live_return_pct!=null?p.live_return_pct:p.return_pct;
+    $('#mCumPct').textContent=fmtPct(cumPct);$('#mCumPct').className='value '+clsP(cumPct);
+    $('#mCumAbs').textContent=(liveAbs>=0?'+':'')+fmtUsd(liveAbs);$('#mCumAbs').className='mono '+clsP(liveAbs);
     const dp=p.daily_pnl||0;
     $('#mDaily').textContent=(dp>=0?'+':'')+fmtUsd(dp);$('#mDaily').className='value '+clsP(dp);
     $('#mOpen').textContent=p.open_positions;
@@ -463,7 +478,7 @@ async function loadPerformance(){
 /* ---- Positions ---- */
 function renderPositions(list){
   const b=$('#posBody');b.innerHTML='';
-  if(!list||!list.length){b.innerHTML=`<tr><td colspan="8" class="empty">No open positions.</td></tr>`;return;}
+  if(!list||!list.length){b.innerHTML=`<tr><td colspan="10" class="empty">No open positions.</td></tr>`;return;}
   list.forEach(p=>{
     const long=p.side==='buy',runner=p.phase==='runner';
     const tags=[
@@ -475,11 +490,20 @@ function renderPositions(list){
     const sl=runner?p.entry_price:p.stop_loss_price, tp=runner?p.runner_tp_price:p.take_profit_price;
     const notional=p.notional_quote!=null?p.notional_quote:Math.abs((p.entry_price||0)*(p.amount||0));
     const size=`${fmtUsd(notional)}<br><span class="dim" style="font-size:10px">margin ${fmtUsd(p.margin_quote||0)}</span>`;
+    // Live mark + unrealized PnL (net of fees) + ROE% on margin — like an exchange.
+    const mark=p.mark_price!=null?num(p.mark_price):'<span class="dim">…</span>';
+    let upnl='<span class="dim">—</span>';
+    if(p.unrealized_pnl!=null){
+      const roe=p.unrealized_pct!=null?` <span style="font-size:10px">(${p.unrealized_pct>=0?'+':''}${p.unrealized_pct}%)</span>`:'';
+      upnl=`<span class="${clsP(p.unrealized_pnl)}">${p.unrealized_pnl>=0?'+':''}${fmtUsd(p.unrealized_pnl)}${roe}</span>`;
+    }
+    const symCell=`<b>${esc(p.symbol||p.asset||'—')}</b>${newsLine(p.news)}`;
     const tr=el('tr',null,
-      `<td><b>${p.symbol||p.asset||'—'}</b></td>
+      `<td>${symCell}</td>
        <td><span class="badge ${long?'long':'short'}">${long?'LONG':'SHORT'}</span></td>
-       <td>${num(p.entry_price)}</td><td>${num(sl)}</td><td>${num(tp)}</td>
+       <td>${num(p.entry_price)}</td><td>${mark}</td><td>${num(sl)}</td><td>${num(tp)}</td>
        <td>${size}</td>
+       <td class="mono">${upnl}</td>
        <td>${tags||'—'}</td>
        <td style="text-align:right"></td>`);
     const btn=el('button','btn mini','Close');
@@ -536,9 +560,15 @@ async function loadStrategies(){
 /* ---- Signals / Orders ---- */
 const SENT={BULL:'up',BEAR:'down',NEUTRAL:''};
 function signalRow(h){
+  const when=fmtWhen(h.published_at||h.received_at);
+  const src=h.source?esc(h.source):'';
+  const meta=[when,src].filter(Boolean).join(' · ');
+  const t=esc((h.title||'').slice(0,52));
+  const u=safeUrl(h.url);
+  const title=u?`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${t}</a>`:t;
   return `<div class="list-row">
-    <span class="t">${(h.asset||'—')}</span>
-    <span class="m"><b class="${SENT[h.sentiment]||''}">${h.sentiment||'—'}</b> · ${(h.title||'').slice(0,42)}</span>
+    <span class="t">${esc(h.asset||'—')}</span>
+    <span class="m"><b class="${SENT[h.sentiment]||''}">${esc(h.sentiment||'—')}</b> · ${title}${meta?`<span class="dim" style="display:block;font-size:10px">${meta}</span>`:''}</span>
     <span class="chip ${SENT[h.sentiment]||''}">${((h.confidence||0)*100).toFixed(0)}%</span>
   </div>`;
 }

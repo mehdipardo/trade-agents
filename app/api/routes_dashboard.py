@@ -70,11 +70,52 @@ async def orders(limit: int = 50) -> dict[str, list[dict]]:
     return {"orders": items}
 
 
+async def _enrich_position(pos: dict) -> dict:
+    """Attach a live mark price + unrealized PnL/ROE to an open position.
+
+    Marks against the real public price (net of the round-trip taker fee, to
+    match how closed trades are booked). When no live price is available the
+    unrealized fields are null — never marked at a fabricated price.
+    """
+    from app.services.position_monitor import realized_pnl, round_trip_fee
+    from app.services.prices import get_price, last_source
+
+    side = pos.get("side") or "buy"
+    entry = float(pos.get("entry_price") or 0.0)
+    amount = float(pos.get("amount") or 0.0)
+    margin = float(pos.get("margin_quote") or 0.0)
+    symbol = pos.get("asset") or pos.get("symbol")
+
+    mark = await get_price(symbol) if symbol else None
+    enriched = {**pos}
+    if mark is not None and mark > 0 and entry > 0 and amount > 0:
+        fee = round_trip_fee(entry, mark, amount, get_settings().taker_fee_pct)
+        unrealized = realized_pnl(side, entry, mark, amount) - fee
+        move = (mark - entry) / entry * 100.0
+        enriched.update({
+            "mark_price": round(mark, 8),
+            "mark_source": last_source(symbol),
+            "unrealized_pnl": round(unrealized, 2),
+            "unrealized_pct": round(unrealized / margin * 100.0, 2) if margin else None,
+            "price_move_pct": round(move if side == "buy" else -move, 3),
+        })
+    else:
+        enriched.update({
+            "mark_price": None, "mark_source": None, "unrealized_pnl": None,
+            "unrealized_pct": None, "price_move_pct": None,
+        })
+    return enriched
+
+
 @router.get("/positions")
 async def positions() -> dict[str, object]:
-    """Currently open positions + risk-state snapshot."""
+    """Currently open positions (with live unrealized PnL) + risk snapshot."""
+    import asyncio
+
     store = get_store()
-    return {"positions": await store.open_positions(), "state": await store.snapshot()}
+    raw = await store.open_positions()
+    enriched = await asyncio.gather(*(_enrich_position(p) for p in raw))
+    return {"positions": list(enriched), "state": await store.snapshot()}
 
 
 @router.get("/performance")
@@ -84,14 +125,20 @@ async def performance() -> dict[str, object]:
     Equity = starting equity + lifetime realized PnL (net of fees). Unrealized
     PnL is omitted in offline mode (no live mark price).
     """
+    import asyncio
+
     settings = get_settings()
     store = get_store()
     perf = await store.performance()
     snap = await store.snapshot()
     positions_open = await store.open_positions()
+    enriched = await asyncio.gather(*(_enrich_position(p) for p in positions_open))
     start = settings.starting_equity_quote
     realized = perf["realized_total"]
-    equity = start + realized
+    # Live unrealized PnL across open positions (0 for any position without a mark).
+    unrealized = round(sum(float(p.get("unrealized_pnl") or 0.0) for p in enriched), 2)
+    equity = start + realized  # realized-only balance (matches closed-trade ledger)
+    live_equity = round(equity + unrealized, 2)  # exchange-style: includes unrealized
     exposure = sum(
         float(p.get("notional_quote") or p.get("entry_price", 0) * p.get("amount", 0))
         for p in positions_open
@@ -101,8 +148,11 @@ async def performance() -> dict[str, object]:
     return {
         "starting_equity": start,
         "equity": round(equity, 2),
+        "live_equity": live_equity,
+        "unrealized_pnl": unrealized,
         "realized_total": realized,
         "return_pct": round(realized / start * 100, 3) if start else 0.0,
+        "live_return_pct": round((live_equity - start) / start * 100, 3) if start else 0.0,
         "daily_pnl": snap.get("daily_pnl", 0.0),
         "open_positions": len(positions_open),
         "exposure": round(exposure, 2),

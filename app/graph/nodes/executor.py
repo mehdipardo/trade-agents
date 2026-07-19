@@ -57,6 +57,21 @@ def client_order_id(event_id: str) -> str:
     return f"fst-{abs(hash(event_id))}"
 
 
+def _news_ref(event: Any) -> dict:
+    """Compact reference to the news that triggered the trade (for the UI)."""
+    return {
+        "id": getattr(event, "id", None),
+        "title": getattr(event, "title", None),
+        "url": getattr(event, "url", None),
+        "source": getattr(event, "source", None),
+        "published_at": (
+            event.published_at.isoformat()
+            if getattr(event, "published_at", None) is not None
+            else None
+        ),
+    }
+
+
 def _position_detail(
     symbol: str,
     side: str,
@@ -70,6 +85,7 @@ def _position_detail(
     margin_leverage: int,
     impact_score: int,
     original_signal: dict | None,
+    news: dict | None = None,
 ) -> dict:
     from app.services.position_monitor import sl_tp_prices
 
@@ -104,6 +120,7 @@ def _position_detail(
         "phase": "main",  # "main" -> "runner" once TP1 hits
         "opened_at": datetime.now(UTC).isoformat(),
         "original_signal": original_signal or {},
+        "news": news or {},
     }
 
 
@@ -121,6 +138,7 @@ async def _record(
     impact_score: int,
     cooldown_s: int,
     original_signal: dict | None,
+    news: dict | None = None,
 ) -> None:
     store = get_store()
     await store.record_trade(symbol, cooldown_s=cooldown_s)
@@ -130,7 +148,7 @@ async def _record(
         detail=_position_detail(
             symbol, side, entry_price, amount, stop_loss_pct, take_profit_pct,
             runner_pct, runner_tp_pct, leverage, margin_leverage, impact_score,
-            original_signal,
+            original_signal, news,
         ),
     )
 
@@ -183,6 +201,7 @@ async def _offline_fill(state: TradingState) -> dict[str, Any]:
         signal.impact_score,  # type: ignore[union-attr]
         settings.cooldown_s,
         signal.model_dump(),  # type: ignore[union-attr]
+        _news_ref(event),
     )
     log.info(
         "paper_fill", event_id=event.id, symbol=symbol, side=side,
@@ -241,6 +260,7 @@ async def _live_fill(state: TradingState, ex: ExchangeClient) -> dict[str, Any]:
         signal.impact_score,  # type: ignore[union-attr]
         settings.cooldown_s,
         signal.model_dump(),  # type: ignore[union-attr]
+        _news_ref(event),
     )
     log.info("live_fill", event_id=event.id, symbol=symbol, side=side, amount=order.amount)
     await emit("order", event_id=event.id, payload=order.model_dump())
