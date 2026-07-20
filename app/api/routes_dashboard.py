@@ -209,13 +209,16 @@ def _cost(prompt_tokens: int, completion_tokens: int) -> float:
 @router.get("/llm-usage")
 async def llm_usage() -> dict[str, object]:
     """Groq consumption tracker: calls, tokens, news analyzed, cost per signal."""
-    u = await get_store().llm_usage()
+    store = get_store()
+    u = await store.llm_usage()
+    funnel = await store.ingestion()
     cost_total = _cost(u["prompt_tokens"], u["completion_tokens"])
     cost_today = _cost(u["prompt_tokens_today"], u["completion_tokens_today"])
     news_total = u["news_analyzed_total"]
     news_today = u["news_analyzed_today"]
     return {
         **u,
+        **funnel,
         "provider": get_settings().llm_provider,
         "est_cost_usd": round(cost_total, 4),
         "cost_today_usd": round(cost_today, 4),

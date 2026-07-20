@@ -97,6 +97,10 @@ class Store(Protocol):
     async def bump_news_analyzed(self) -> None: ...
     async def llm_usage(self) -> dict: ...
 
+    # Ingestion funnel (received -> analyzed / dropped) for the dashboard.
+    async def bump_ingest(self, kind: str) -> None: ...
+    async def ingestion(self) -> dict: ...
+
     # Dedup
     async def seen_before(self, key: str, ttl_s: int) -> bool: ...
 
@@ -144,9 +148,22 @@ class InMemoryStore:
         self._llm_tokens_by_day: dict[str, list[int]] = {}  # day -> [prompt, completion]
         self._news_analyzed = 0
         self._news_analyzed_by_day: dict[str, int] = {}
+        self._ingest_by_day: dict[str, dict[str, int]] = {}  # day -> {received,stale,duplicate}
 
     async def connect(self) -> None:
         log.info("store_backend", backend="in-memory")
+
+    async def bump_ingest(self, kind: str) -> None:
+        day = self._ingest_by_day.setdefault(_utc_day(), {})
+        day[kind] = day.get(kind, 0) + 1
+
+    async def ingestion(self) -> dict:
+        d = self._ingest_by_day.get(_utc_day(), {})
+        return {
+            "received_today": d.get("received", 0),
+            "dropped_stale_today": d.get("stale", 0),
+            "dropped_duplicate_today": d.get("duplicate", 0),
+        }
 
     async def close(self) -> None:
         return None
@@ -447,6 +464,24 @@ class RedisStore:
         dk = f"fst:news_analyzed:{day}"
         await self._r.incr(dk)
         await self._r.expire(dk, 2 * 24 * _HOUR_S)
+
+    async def bump_ingest(self, kind: str) -> None:
+        k = f"fst:ingest:{kind}:{_utc_day()}"
+        await self._r.incr(k)
+        await self._r.expire(k, 2 * 24 * _HOUR_S)
+
+    async def ingestion(self) -> dict:
+        day = _utc_day()
+
+        async def _int(key: str) -> int:
+            v = await self._r.get(key)
+            return int(v) if v else 0
+
+        return {
+            "received_today": await _int(f"fst:ingest:received:{day}"),
+            "dropped_stale_today": await _int(f"fst:ingest:stale:{day}"),
+            "dropped_duplicate_today": await _int(f"fst:ingest:duplicate:{day}"),
+        }
 
     async def llm_usage(self) -> dict:
         day = _utc_day()

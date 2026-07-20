@@ -606,12 +606,16 @@ async function loadLlmUsage(){
     $('#llmChip').title=`Groq ${u.provider} · ${u.calls_total} calls · ${u.total_tokens.toLocaleString()} tokens · est $${u.est_cost_usd} lifetime`;
     $('#llmProvider').textContent=u.provider;
     const c=$('#llmCost');
-    const tile=(l,v,cls)=>`<div class="bt-tile"><div class="label">${l}</div><div class="v ${cls||''}">${v}</div></div>`;
+    const tile=(l,v,cls,tip)=>`<div class="bt-tile"${tip?` title="${esc(tip)}"`:''}><div class="label">${l}</div><div class="v ${cls||''}">${v}</div></div>`;
+    // Ingestion funnel: received -> analyzed, with the stale/duplicate drops that
+    // explain a low "analyzed" count (why a story never reached the analyst).
+    const rcv=u.received_today||0,stale=u.dropped_stale_today||0,dup=u.dropped_duplicate_today||0;
     c.innerHTML=
       tile('Cost today',`$${(u.cost_today_usd||0).toFixed(2)}`)+
-      tile('News analyzed',`${u.news_analyzed_today||0}`)+
+      tile('Received today',`${rcv}`,'','News events that entered the pipeline today')+
+      tile('Analyzed',`${u.news_analyzed_today||0}`,'','Reached the LLM analyst (passed dedup + freshness)')+
+      tile('Dropped',`${stale} stale · ${dup} dup`,stale>0&&(u.news_analyzed_today||0)===0?'down':'','Stale = older than the freshness window; dup = duplicate headline')+
       tile('$ / news',`$${(u.cost_per_news_today_usd||u.cost_per_news_usd||0).toFixed(4)}`)+
-      tile('Tokens today',`${(((u.prompt_tokens_today||0)+(u.completion_tokens_today||0))/1000).toFixed(1)}k`)+
       tile('Lifetime',`$${(u.est_cost_usd||0).toFixed(2)}`);
   }catch(e){}
 }

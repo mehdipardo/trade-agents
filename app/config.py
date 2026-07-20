@@ -66,12 +66,13 @@ class Settings(BaseSettings):
     # aggregator often re-surfaces old stories). 0 disables the gate. Events with
     # no published_at are treated as fresh (stamped at reception).
     #
-    # 30 min, NOT hours: a high-impact print is fully priced within minutes, so a
-    # story that only reaches us hours later (e.g. a CPI article syndicated 3h
-    # after the release) must be dropped, not chased. This also matches the
-    # economic watcher's trailing window so a legitimately delayed macro actual
-    # (fired up to TRAIL_S late) still passes.
-    max_news_age_s: int = Field(default=1800, ge=0)  # 30 minutes
+    # 2h is a deliberate balance. A 30-min cap starved the pipeline: legitimate
+    # RSS news routinely surfaces 30–90 min stale (feed/aggregation lag), so a
+    # tight gate silently dropped ~everything. 2h passes that real news yet still
+    # drops the genuinely stale — a weeks-old headline resurfacing, or the 3h-late
+    # syndicated print that triggered a chased entry. The ingestion funnel
+    # (dropped-stale counter) makes this tunable with data instead of guesswork.
+    max_news_age_s: int = Field(default=7200, ge=0)  # 2 hours
 
     # --- Risk engine (see app/risk/rules.py) -----------------------------
     min_intensity: int = Field(default=3, ge=1, le=5)

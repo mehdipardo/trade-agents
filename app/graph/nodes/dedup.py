@@ -56,6 +56,11 @@ def is_stale(published_at: datetime | None, max_age_s: int, *, now: datetime | N
 async def dedup_node(state: TradingState) -> dict[str, Any]:
     event = state["event"]
     settings = get_settings()
+    store = get_store()
+    # Ingestion funnel: every event entering the pipeline is "received"; the
+    # stale/duplicate drops below are counted too, so the dashboard shows why
+    # nothing reached the analyst (the "0 news analyzed" mystery).
+    await store.bump_ingest("received")
 
     # Freshness gate first (cheapest, and it must veto stale re-syndications
     # even if their exact title hasn't been seen in the last 30 minutes). Only
@@ -63,10 +68,13 @@ async def dedup_node(state: TradingState) -> dict[str, Any]:
     if event.source in _FRESHNESS_GATED_SOURCES and is_stale(
         event.published_at, settings.max_news_age_s
     ):
+        await store.bump_ingest("stale")
         return {"is_duplicate": False, "status": "skipped_stale"}
 
     key = dedup_key(event.title)
-    is_duplicate = await get_store().seen_before(key, ttl_s=DEDUP_TTL_S)
+    is_duplicate = await store.seen_before(key, ttl_s=DEDUP_TTL_S)
+    if is_duplicate:
+        await store.bump_ingest("duplicate")
     return {
         "is_duplicate": is_duplicate,
         "status": "skipped_duplicate" if is_duplicate else "received",
