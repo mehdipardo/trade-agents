@@ -86,6 +86,7 @@ def _position_detail(
     impact_score: int,
     original_signal: dict | None,
     news: dict | None = None,
+    confluence: str | None = None,
 ) -> dict:
     from app.services.position_monitor import sl_tp_prices
 
@@ -121,6 +122,7 @@ def _position_detail(
         "opened_at": datetime.now(UTC).isoformat(),
         "original_signal": original_signal or {},
         "news": news or {},
+        "confluence": confluence,
     }
 
 
@@ -139,6 +141,7 @@ async def _record(
     cooldown_s: int,
     original_signal: dict | None,
     news: dict | None = None,
+    confluence: str | None = None,
 ) -> None:
     store = get_store()
     await store.record_trade(symbol, cooldown_s=cooldown_s)
@@ -148,7 +151,7 @@ async def _record(
         detail=_position_detail(
             symbol, side, entry_price, amount, stop_loss_pct, take_profit_pct,
             runner_pct, runner_tp_pct, leverage, margin_leverage, impact_score,
-            original_signal, news,
+            original_signal, news, confluence,
         ),
     )
 
@@ -202,6 +205,7 @@ async def _offline_fill(state: TradingState) -> dict[str, Any]:
         settings.cooldown_s,
         signal.model_dump(),  # type: ignore[union-attr]
         _news_ref(event),
+        risk.confluence,  # type: ignore[union-attr]
     )
     log.info(
         "paper_fill", event_id=event.id, symbol=symbol, side=side,
@@ -261,6 +265,7 @@ async def _live_fill(state: TradingState, ex: ExchangeClient) -> dict[str, Any]:
         settings.cooldown_s,
         signal.model_dump(),  # type: ignore[union-attr]
         _news_ref(event),
+        risk.confluence,  # type: ignore[union-attr]
     )
     log.info("live_fill", event_id=event.id, symbol=symbol, side=side, amount=order.amount)
     await emit("order", event_id=event.id, payload=order.model_dump())

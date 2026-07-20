@@ -55,6 +55,12 @@ async def session(x_admin_token: str | None = Header(default=None)) -> dict[str,
     }
 
 
+@router.get("/bias")
+async def biases() -> dict[str, object]:
+    """Operator directional biases per asset (read-only; set via /admin/bias)."""
+    return {"biases": await get_store().all_biases()}
+
+
 @router.get("/eval")
 async def eval_report() -> dict[str, object]:
     """Last persisted analyst-eval report (accuracy, ECE, prompt version).

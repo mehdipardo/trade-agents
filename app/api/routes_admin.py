@@ -134,6 +134,37 @@ async def close_position(body: ClosePositionRequest) -> dict[str, Any]:
     return result
 
 
+class BiasRequest(BaseModel):
+    """Body for ``POST /admin/bias``: the operator's directional view on an asset."""
+
+    asset: str
+    bias: str  # "BULL" | "BEAR" | "NEUTRAL" (neutral clears the bias)
+
+
+@router.post("/bias", dependencies=[Depends(require_admin)])
+async def set_bias(body: BiasRequest) -> dict[str, Any]:
+    """Set (or clear) the operator bias on a whitelisted asset.
+
+    The risk engine halves the risk budget of trades taken AGAINST the bias.
+    This is how external conviction (your own TA, a trusted analyst's call)
+    enters the system explicitly instead of via scraping.
+    """
+    from app.config import get_settings
+
+    if body.bias not in ("BULL", "BEAR", "NEUTRAL"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="bias must be BULL/BEAR/NEUTRAL"
+        )
+    if body.asset not in get_settings().asset_whitelist_set:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"{body.asset} not in whitelist"
+        )
+    store = get_store()
+    await store.set_bias(body.asset, None if body.bias == "NEUTRAL" else body.bias)
+    log.info("bias_set", asset=body.asset, bias=body.bias)
+    return {"biases": await store.all_biases()}
+
+
 @router.post("/strategy", dependencies=[Depends(require_admin)])
 async def set_strategy(body: StrategyRequest) -> dict[str, Any]:
     """Switch the active strategy (SL/TP, sizing, gates applied from next event)."""

@@ -283,6 +283,11 @@
         </div>
 
         <div class="card">
+          <header><h3>Operator bias</h3><span class="h-sub">halves risk on counter-bias trades</span></header>
+          <div class="body" id="biasCard"></div>
+        </div>
+
+        <div class="card">
           <header><h3>LLM cost</h3><span class="h-sub">Groq · today</span><div class="spacer"></div><span class="chip violet" id="llmProvider">groq</span></header>
           <div class="bt-grid" id="llmCost"></div>
         </div>
@@ -356,7 +361,7 @@ async function resolveSession(){
   const ro=$('#roChip');if(ro)ro.classList.toggle('hidden',IS_ADMIN);
   const kb=$('#killBtn');if(kb){kb.classList.toggle('ro',!IS_ADMIN);kb.title=IS_ADMIN?'':'read-only — admin token required';}
   // Re-render control-bearing panels now that admin state is known.
-  refreshState();loadStrategies();if(!$('#tab-sources').classList.contains('hidden'))loadSources();
+  refreshState();loadStrategies();loadBias();if(!$('#tab-sources').classList.contains('hidden'))loadSources();
 }
 
 /* ---- Tabs ---- */
@@ -510,6 +515,7 @@ function renderPositions(list){
       (p.margin_leverage>1)?`<span class="badge lev">${p.margin_leverage}× lev</span>`:'',
       (p.leverage>1)?`<span class="badge impact">boost x${p.leverage}</span>`:'',
       (p.impact_score!=null)?`<span class="badge impact">i${p.impact_score}</span>`:'',
+      p.confluence?`<span class="badge lev" title="${esc(p.confluence)}">TA</span>`:'',
     ].join(' ');
     const sl=runner?p.entry_price:p.stop_loss_price, tp=runner?p.runner_tp_price:p.take_profit_price;
     const notional=p.notional_quote!=null?p.notional_quote:Math.abs((p.entry_price||0)*(p.amount||0));
@@ -625,6 +631,32 @@ async function loadCritiques(){
     const meta=`${cr.symbol} · ${cr.reason} · PnL ${cr.pnl_quote>=0?'+':''}${(+cr.pnl_quote).toFixed(2)}`+(cr.leverage>1?` · x${cr.leverage}`:'')+(cr.impact_score?` · impact ${cr.impact_score}/10`:'');
     return `<div class="crit"><div class="crit-head"><span class="crit-sym">${cr.symbol}</span><span class="chip down">${cr.reason}</span><span class="dim">${when} UTC</span></div><div class="crit-body">${cr.critique||''}</div></div>`;
   }).join('');
+  }catch(e){}
+}
+
+/* ---- Operator bias ---- */
+let WHITELIST=[];
+async function loadBias(){
+  try{const {biases}=await api('/api/bias'),c=$('#biasCard');
+    const rows=Object.entries(biases||{});
+    let html=rows.length
+      ?rows.map(([a,b])=>`<div class="list-row"><span class="t">${esc(a)}</span><span class="m"><b class="${b==='BULL'?'up':'down'}">${esc(b)}</b></span>${IS_ADMIN?`<button class="btn mini" data-clear="${esc(a)}">Clear</button>`:''}</div>`).join('')
+      :'<div class="empty">No bias set. The engine trades news + technicals symmetrically.</div>';
+    if(IS_ADMIN&&WHITELIST.length){
+      html+=`<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <select id="biasAsset" class="btn" style="cursor:pointer">${WHITELIST.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
+        <button class="btn mini" id="biasBull">Bull</button>
+        <button class="btn mini" id="biasBear">Bear</button>
+      </div>`;
+    }
+    c.innerHTML=html;
+    if(IS_ADMIN){
+      $$('button[data-clear]',c).forEach(b=>b.onclick=async()=>{try{await api('/admin/bias',{asset:b.dataset.clear,bias:'NEUTRAL'});loadBias();}catch(e){}});
+      const set=async(bias)=>{const a=$('#biasAsset');if(!a)return;try{await api('/admin/bias',{asset:a.value,bias});loadBias();}catch(e){}};
+      const bb=$('#biasBull'),br=$('#biasBear');
+      if(bb)bb.onclick=()=>set('BULL');
+      if(br)br.onclick=()=>set('BEAR');
+    }
   }catch(e){}
 }
 
@@ -751,8 +783,8 @@ function connectWs(){
 
 /* ---- Boot ---- */
 async function hydrate(){
-  try{const h=await api('/api/health');$('#healthDot').className='dot ok';$('#modeChip').textContent=`${h.exchange_id} · ${h.llm_provider}`;}catch(e){$('#healthDot').className='dot';}
-  loadPerformance();refreshState();loadStrategies();loadSignals();loadOrders();loadCritiques();loadTrades();loadLlmUsage();
+  try{const h=await api('/api/health');$('#healthDot').className='dot ok';$('#modeChip').textContent=`${h.exchange_id} · ${h.llm_provider}`;WHITELIST=h.asset_whitelist||[];}catch(e){$('#healthDot').className='dot';}
+  loadPerformance();refreshState();loadStrategies();loadSignals();loadOrders();loadCritiques();loadTrades();loadLlmUsage();loadBias();
 }
 resolveSession();setChart('BTC/USDT');showScanner();connectWs();
 setInterval(()=>{refreshState();loadPerformance();loadLlmUsage();},5000);

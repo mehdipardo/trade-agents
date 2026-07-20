@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-SourceKind = Literal["social", "economic", "regulatory", "news"]
+SourceKind = Literal["social", "economic", "regulatory", "news", "technical"]
 Cost = Literal["free", "freemium", "paid"]
 
 
@@ -187,6 +187,34 @@ CATALOG: tuple[SourceSpec, ...] = (
                 placeholder="leave empty to use the built-in world+markets feeds",
                 required=False,
                 help="Comma-separated public RSS endpoints. Empty = curated defaults.",
+            ),
+        ),
+    ),
+    SourceSpec(
+        id="technical_scanner",
+        name="Technical setup scanner (trend + levels)",
+        kind="technical",
+        description=(
+            "Scans the crypto whitelist every few minutes for strict setups: a 5m "
+            "close breaking recent swing support/resistance WITH the EMA20/50 trend "
+            "and RSI not exhausted. Setups trade through the same risk engine as "
+            "news — no LLM involved, fully deterministic."
+        ),
+        cost="free",
+        reactivity="minutes (candle close)",
+        default_enabled=True,
+        notes="Crypto symbols only (needs a candle source). At most one setup per "
+        "symbol per hour; cooldowns, sizing and kill switch apply as usual. The "
+        "same module also powers the confluence gate that sizes down news trades "
+        "fighting the trend.",
+        tags=("technical", "trend", "levels", "recommended"),
+        config_fields=(
+            ConfigField(
+                name="technical_scan_interval_s",
+                label="Scan interval (seconds)",
+                placeholder="300",
+                required=False,
+                help="How often to sweep the whitelist. Default 300s (5m candles).",
             ),
         ),
     ),

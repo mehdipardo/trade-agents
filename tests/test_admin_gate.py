@@ -37,6 +37,7 @@ def test_mutation_rejected_without_token(client: TestClient) -> None:
         ("/admin/positions/close", {"symbol": "BTC/USDT"}),
         ("/admin/strategy", {"id": "balanced"}),
         ("/admin/sources/crypto_news_rss/toggle", {"enabled": False}),
+        ("/admin/bias", {"asset": "BTC/USDT", "bias": "BULL"}),
     ):
         r = client.post(path, json=body)
         assert r.status_code == 403, path

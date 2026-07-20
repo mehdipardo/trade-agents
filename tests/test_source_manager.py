@@ -59,6 +59,6 @@ def test_default_sources_are_the_free_working_ones() -> None:
     # pre-configured (Trump family) but OFF — its API is Cloudflare-gated and 403s
     # from a VPS, so it needs a reachable feed/mirror/webhook before enabling. The
     # paid SSE aggregator is OFF by default (its free endpoint went 402).
-    assert enabled == {"econ_calendar", "crypto_news_rss"}
+    assert enabled == {"econ_calendar", "crypto_news_rss", "technical_scanner"}
     assert not catalog.is_enabled("news_aggregator")
     assert not catalog.is_enabled("trump_truthsocial")

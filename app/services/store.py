@@ -117,6 +117,11 @@ class Store(Protocol):
     async def record_trade_close(self, entry: dict) -> None: ...
     async def closed_trades(self, limit: int = 50) -> list[dict]: ...
 
+    # Operator directional bias per asset ("BULL"/"BEAR"; unset = neutral).
+    async def set_bias(self, asset: str, bias: str | None) -> None: ...
+    async def all_biases(self) -> dict[str, str]: ...
+    async def get_bias(self, asset: str) -> str | None: ...
+
     # Maintenance: drop journal rows fabricated by the (fixed) mock-price bug.
     async def purge_mock_journal(self, mock_prices: dict[str, float]) -> dict: ...
 
@@ -151,6 +156,7 @@ class InMemoryStore:
         self._news_analyzed_by_day: dict[str, int] = {}
         self._ingest_by_day: dict[str, dict[str, int]] = {}  # day -> {received,stale,duplicate}
         self._news_age_by_day: dict[str, list[float]] = {}  # day -> [sum_s, count, max_s]
+        self._biases: dict[str, str] = {}  # asset -> "BULL"/"BEAR"
 
     async def connect(self) -> None:
         log.info("store_backend", backend="in-memory")
@@ -317,6 +323,18 @@ class InMemoryStore:
 
     async def closed_trades(self, limit: int = 50) -> list[dict]:
         return list(reversed(self._closed_trades[-limit:]))
+
+    async def set_bias(self, asset: str, bias: str | None) -> None:
+        if bias in (None, "", "NEUTRAL"):
+            self._biases.pop(asset, None)
+        else:
+            self._biases[asset] = bias
+
+    async def all_biases(self) -> dict[str, str]:
+        return dict(self._biases)
+
+    async def get_bias(self, asset: str) -> str | None:
+        return self._biases.get(asset)
 
     async def purge_mock_journal(self, mock_prices: dict[str, float]) -> dict:
         removed_c = [c for c in self._critiques if _is_mock_exit(c, mock_prices)]
@@ -566,6 +584,18 @@ class RedisStore:
     async def closed_trades(self, limit: int = 50) -> list[dict]:
         raw = await self._r.lrange("fst:closed_trades", 0, limit - 1)
         return [orjson.loads(v) for v in raw]
+
+    async def set_bias(self, asset: str, bias: str | None) -> None:
+        if bias in (None, "", "NEUTRAL"):
+            await self._r.hdel("fst:bias", asset)
+        else:
+            await self._r.hset("fst:bias", asset, bias)
+
+    async def all_biases(self) -> dict[str, str]:
+        return dict(await self._r.hgetall("fst:bias") or {})
+
+    async def get_bias(self, asset: str) -> str | None:
+        return await self._r.hget("fst:bias", asset)
 
     async def _rewrite_list(self, key: str, kept: list[dict]) -> None:
         """Replace a JSON list key with ``kept`` (newest-first order preserved)."""

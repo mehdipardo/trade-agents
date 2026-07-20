@@ -199,12 +199,22 @@ def _crypto_news_rss(
     )
 
 
+def _technical_scanner(
+    queue: asyncio.Queue[NewsEvent], settings: MergedSettings
+) -> Coroutine[Any, Any, None] | None:
+    from app.sources.technical_scanner import scanner_loop
+
+    # Key-less, default-enabled: works out of the box on the crypto whitelist.
+    return scanner_loop(queue, float(getattr(settings, "technical_scan_interval_s", 300)))
+
+
 _FACTORIES: dict[str, _Factory] = {
     "news_aggregator": _news_aggregator,
     "econ_calendar": _econ_calendar,
     "trump_truthsocial": _trump_truthsocial,
     "congress_bills": _congress_bills,
     "crypto_news_rss": _crypto_news_rss,
+    "technical_scanner": _technical_scanner,
 }
 
 

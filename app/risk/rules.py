@@ -84,6 +84,11 @@ class RiskContext:
     asset_in_cooldown: bool
     open_position_on_asset: bool
     free_capital_quote: float = 0.0  # equity minus margin already locked
+    # Technical confluence score for the intended side (-2..+2), None when no
+    # candle data is available (missing data NEVER penalizes a trade).
+    technical_score: int | None = None
+    # Operator-declared directional bias on the asset ("BULL"/"BEAR"), None if unset.
+    operator_bias: str | None = None
 
 
 def _reject(reason: str) -> RiskVerdict:
@@ -163,8 +168,38 @@ def evaluate(signal: Signal, ctx: RiskContext, config: RiskConfig) -> RiskVerdic
     sl_pct = config.stop_loss_pct
     tp_pct = config.take_profit_pct
 
+    # --- Confluence: technicals + operator bias ---------------------------
+    # Philosophy: confluence adjusts SIZE, it rarely vetoes. A news signal
+    # fighting the technicals gets a smaller risk budget; one confirmed by them
+    # gets a modest boost. The only hard veto is a WEAK signal that is STRONGLY
+    # counter-trend — the classic late chase into an exhausted move.
+    confluence_notes: list[str] = []
+    risk_multiplier = 1.0
+    if ctx.operator_bias in ("BULL", "BEAR"):
+        bias_aligned = (side == "buy") == (ctx.operator_bias == "BULL")
+        if bias_aligned:
+            confluence_notes.append("bias-aligned")
+        else:
+            risk_multiplier *= 0.5
+            confluence_notes.append("counter-bias: risk halved")
+    if ctx.technical_score is not None:
+        s = ctx.technical_score
+        if s <= -2 and signal.confidence < 0.75:
+            return _reject(
+                f"technicals strongly against (score {s}) and confidence "
+                f"{signal.confidence:.2f} < 0.75"
+            )
+        if s < 0:
+            risk_multiplier *= 0.6
+            confluence_notes.append(f"counter-trend (score {s}): risk reduced")
+        elif s >= 2:
+            risk_multiplier *= 1.25
+            confluence_notes.append(f"trend-confirmed (score +{s}): risk boosted")
+        else:
+            confluence_notes.append(f"technicals neutral (score {s:+d})")
+
     # --- Risk-based sizing ------------------------------------------------
-    risk_pct = config.risk_per_trade_pct * leverage
+    risk_pct = config.risk_per_trade_pct * leverage * risk_multiplier
     size_quote = _risk_based_notional(risk_pct, sl_pct, ctx, config)
     if size_quote <= 0:
         return _reject("computed position size is zero")
@@ -192,4 +227,5 @@ def evaluate(signal: Signal, ctx: RiskContext, config: RiskConfig) -> RiskVerdic
         leverage=leverage,
         margin_leverage=margin_leverage,
         margin_quote=round(margin_quote, 2),
+        confluence="; ".join(confluence_notes) or None,
     )

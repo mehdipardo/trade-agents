@@ -29,7 +29,8 @@ class NewsEvent(BaseModel):
 
     id: str  # uuid4 or a hash provided by the source
     source: Literal[
-        "webhook", "rss", "simulator", "social", "economic", "regulatory", "news"
+        "webhook", "rss", "simulator", "social", "economic", "regulatory", "news",
+        "technical",
     ]
     author: str | None = None
     title: str
@@ -37,6 +38,9 @@ class NewsEvent(BaseModel):
     url: str | None = None
     published_at: datetime | None = None
     received_at: datetime  # stamped on reception (UTC)
+    # Structured payload for non-news events (e.g. a technical setup carries its
+    # direction/confidence here so the analyst can skip the LLM entirely).
+    meta: dict[str, Any] | None = None
 
 
 class Signal(BaseModel):
@@ -75,6 +79,9 @@ class RiskVerdict(BaseModel):
     # for other triggers without changing the SL/TP value (those are on notional).
     margin_leverage: int | None = None
     margin_quote: float | None = None  # margin actually locked for this position
+    # Human-readable summary of the technical/bias confluence applied to sizing
+    # (e.g. "trend-aligned; bias-aligned" or "counter-trend: size reduced").
+    confluence: str | None = None
 
 
 class OrderResult(BaseModel):

@@ -425,6 +425,28 @@ async def _analyze_with_llm(
     return neutral_fallback()
 
 
+def technical_signal(event: NewsEvent, settings: Settings) -> Signal:
+    """Deterministic Signal for a scanner-emitted technical setup (no LLM).
+
+    A technical setup already carries its direction/confidence in ``event.meta``
+    — there is no text for a language model to interpret, so spending a call on
+    it would be pure cost. The whitelist post-validation still applies.
+    """
+    meta = event.meta or {}
+    sentiment = meta.get("direction") if meta.get("direction") in ("BULL", "BEAR") else "NEUTRAL"
+    signal = Signal(
+        sentiment=sentiment,  # type: ignore[arg-type]
+        intensity=3,
+        asset=meta.get("symbol"),
+        confidence=float(meta.get("confidence", 0.0)),
+        rationale=str(meta.get("reason", "technical setup"))[:250],
+        event_type="other",
+        actionability=4,
+        impact_score=int(meta.get("impact", 5)),
+    )
+    return _post_validate(signal, settings)
+
+
 async def analyze(
     event: NewsEvent, settings: Settings, *, llm: Any = _UNSET, prompt_version: str | None = None
 ) -> Signal:

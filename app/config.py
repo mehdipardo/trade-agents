@@ -145,6 +145,11 @@ class Settings(BaseSettings):
     # mirrors are open). Provide via env only — never commit it.
     truth_social_token: str = ""
     truth_social_poll_interval_s: int = Field(default=10, ge=2)
+    # Technical layer: confluence gate on news trades + standalone setup scanner.
+    # The gate reduces (or vetoes) news trades that fight the EMA-trend/RSI; the
+    # scanner emits breakout/breakdown setups on the crypto whitelist.
+    technical_gate: bool = True
+    technical_scan_interval_s: int = Field(default=300, ge=30)
     # Congress.gov bill tracker (opt-in: needs a free API key + tracked bills).
     congress_api_key: str = ""
     congress_tracked_bills: str = ""  # e.g. "119/hr/1747,119/s/1582"

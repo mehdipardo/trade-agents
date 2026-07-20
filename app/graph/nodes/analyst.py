@@ -22,8 +22,15 @@ async def analyst_node(state: TradingState) -> dict[str, Any]:
     from app.services.store import get_store
 
     settings = get_settings()
-    await get_store().bump_news_analyzed()
-    signal = await analyze(state["event"], settings)
+    event = state["event"]
+    if event.source == "technical" and event.meta:
+        # Scanner setup: deterministic signal, no LLM call, no news-cost count.
+        from app.services.llm import technical_signal
+
+        signal = technical_signal(event, settings)
+    else:
+        await get_store().bump_news_analyzed()
+        signal = await analyze(event, settings)
 
     tradable = (
         signal.sentiment != "NEUTRAL"
