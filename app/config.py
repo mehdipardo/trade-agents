@@ -62,17 +62,16 @@ class Settings(BaseSettings):
     )
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     # Freshness gate: drop events whose published_at is older than this (seconds).
-    # Guards against stale / re-syndicated news re-triggering trades (a broad
-    # aggregator often re-surfaces old stories). 0 disables the gate. Events with
-    # no published_at are treated as fresh (stamped at reception).
+    # This is a FILTER on staleness, NOT a delay — fresh news is acted on in
+    # seconds; this only rejects news that reaches us too late to be actionable.
+    # 0 disables the gate. Events with no published_at are treated as fresh.
     #
-    # 2h is a deliberate balance. A 30-min cap starved the pipeline: legitimate
-    # RSS news routinely surfaces 30–90 min stale (feed/aggregation lag), so a
-    # tight gate silently dropped ~everything. 2h passes that real news yet still
-    # drops the genuinely stale — a weeks-old headline resurfacing, or the 3h-late
-    # syndicated print that triggered a chased entry. The ingestion funnel
-    # (dropped-stale counter) makes this tunable with data instead of guesswork.
-    max_news_age_s: int = Field(default=7200, ge=0)  # 2 hours
+    # 5-minute reaction budget: past that a market-moving print is priced in, so
+    # acting on it is pointless (the "dérisoire late entry"). This deliberately
+    # trades volume for freshness — if it starves the pipeline, that means our
+    # SOURCES deliver news too slowly (watch avg_news_age_s in the funnel), and
+    # the fix is faster sources, never a looser gate.
+    max_news_age_s: int = Field(default=300, ge=0)  # 5 minutes
 
     # --- Risk engine (see app/risk/rules.py) -----------------------------
     min_intensity: int = Field(default=3, ge=1, le=5)

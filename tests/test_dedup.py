@@ -74,7 +74,7 @@ async def test_stale_wild_feed_event_is_skipped() -> None:
 
 
 async def test_fresh_wild_feed_event_passes() -> None:
-    recent = datetime.now(UTC) - timedelta(minutes=10)
+    recent = datetime.now(UTC) - timedelta(minutes=1)  # within the 5-min budget
     state = initial_state(_event("Fresh breaking news", source="news", published_at=recent))
     result = await dedup_node(state)
     assert result["status"] == "received"

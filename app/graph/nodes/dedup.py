@@ -61,6 +61,16 @@ async def dedup_node(state: TradingState) -> dict[str, Any]:
     # stale/duplicate drops below are counted too, so the dashboard shows why
     # nothing reached the analyst (the "0 news analyzed" mystery).
     await store.bump_ingest("received")
+    # Source latency = how old the news already is when it reaches us (publish ->
+    # receipt). This is the real speed metric: a tight freshness gate is only
+    # sensible if sources deliver within it. Skip missing/future timestamps.
+    if event.published_at is not None:
+        pub = event.published_at
+        if pub.tzinfo is None:
+            pub = pub.replace(tzinfo=UTC)
+        age_s = (event.received_at - pub).total_seconds()
+        if age_s >= 0:
+            await store.record_news_age(age_s)
 
     # Freshness gate first (cheapest, and it must veto stale re-syndications
     # even if their exact title hasn't been seen in the last 30 minutes). Only

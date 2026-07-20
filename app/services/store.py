@@ -99,6 +99,7 @@ class Store(Protocol):
 
     # Ingestion funnel (received -> analyzed / dropped) for the dashboard.
     async def bump_ingest(self, kind: str) -> None: ...
+    async def record_news_age(self, seconds: float) -> None: ...
     async def ingestion(self) -> dict: ...
 
     # Dedup
@@ -149,6 +150,7 @@ class InMemoryStore:
         self._news_analyzed = 0
         self._news_analyzed_by_day: dict[str, int] = {}
         self._ingest_by_day: dict[str, dict[str, int]] = {}  # day -> {received,stale,duplicate}
+        self._news_age_by_day: dict[str, list[float]] = {}  # day -> [sum_s, count, max_s]
 
     async def connect(self) -> None:
         log.info("store_backend", backend="in-memory")
@@ -157,12 +159,22 @@ class InMemoryStore:
         day = self._ingest_by_day.setdefault(_utc_day(), {})
         day[kind] = day.get(kind, 0) + 1
 
+    async def record_news_age(self, seconds: float) -> None:
+        d = self._news_age_by_day.setdefault(_utc_day(), [0.0, 0, 0.0])
+        d[0] += seconds
+        d[1] = int(d[1]) + 1
+        d[2] = max(d[2], seconds)
+
     async def ingestion(self) -> dict:
         d = self._ingest_by_day.get(_utc_day(), {})
+        age = self._news_age_by_day.get(_utc_day(), [0.0, 0, 0.0])
+        avg = age[0] / age[1] if age[1] else 0.0
         return {
             "received_today": d.get("received", 0),
             "dropped_stale_today": d.get("stale", 0),
             "dropped_duplicate_today": d.get("duplicate", 0),
+            "avg_news_age_s": round(avg, 1),
+            "max_news_age_seen_s": round(age[2], 1),
         }
 
     async def close(self) -> None:
@@ -470,6 +482,18 @@ class RedisStore:
         await self._r.incr(k)
         await self._r.expire(k, 2 * 24 * _HOUR_S)
 
+    async def record_news_age(self, seconds: float) -> None:
+        day = _utc_day()
+        ttl = 2 * 24 * _HOUR_S
+        await self._r.incrbyfloat(f"fst:ingest:age_sum:{day}", seconds)
+        await self._r.incr(f"fst:ingest:age_cnt:{day}")
+        mk = f"fst:ingest:age_max:{day}"
+        cur = await self._r.get(mk)
+        if cur is None or seconds > float(cur):
+            await self._r.set(mk, seconds)
+        for k in (f"fst:ingest:age_sum:{day}", f"fst:ingest:age_cnt:{day}", mk):
+            await self._r.expire(k, ttl)
+
     async def ingestion(self) -> dict:
         day = _utc_day()
 
@@ -477,10 +501,18 @@ class RedisStore:
             v = await self._r.get(key)
             return int(v) if v else 0
 
+        async def _float(key: str) -> float:
+            v = await self._r.get(key)
+            return float(v) if v else 0.0
+
+        cnt = await _int(f"fst:ingest:age_cnt:{day}")
+        avg = (await _float(f"fst:ingest:age_sum:{day}")) / cnt if cnt else 0.0
         return {
             "received_today": await _int(f"fst:ingest:received:{day}"),
             "dropped_stale_today": await _int(f"fst:ingest:stale:{day}"),
             "dropped_duplicate_today": await _int(f"fst:ingest:duplicate:{day}"),
+            "avg_news_age_s": round(avg, 1),
+            "max_news_age_seen_s": round(await _float(f"fst:ingest:age_max:{day}"), 1),
         }
 
     async def llm_usage(self) -> dict:

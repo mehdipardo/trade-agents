@@ -27,30 +27,37 @@ async def _run(event: NewsEvent) -> dict:
 async def test_fresh_news_passes_and_counts_received_analyzed_path() -> None:
     store = InMemoryStore()
     set_store(store)
-    out = await _run(_event(datetime.now(UTC) - timedelta(minutes=5)))
+    out = await _run(_event(datetime.now(UTC) - timedelta(minutes=1)))
     assert out["status"] == "received"
     funnel = await store.ingestion()
     assert funnel["received_today"] == 1
     assert funnel["dropped_stale_today"] == 0
 
 
-async def test_two_hour_old_news_still_passes_default_gate() -> None:
-    # Regression guard: the default gate must NOT starve on ~2h-stale RSS news.
-    store = InMemoryStore()
-    set_store(store)
-    assert Settings().max_news_age_s >= 7200
-    out = await _run(_event(datetime.now(UTC) - timedelta(minutes=90)))
-    assert out["status"] == "received"  # 90 min < 2h default -> passes
+async def test_five_minute_reaction_budget_default() -> None:
+    # The gate honours a tight 5-min freshness budget (fresh-or-nothing).
+    assert Settings().max_news_age_s == 300
 
 
-async def test_clearly_stale_news_is_dropped_and_counted() -> None:
+async def test_news_older_than_budget_is_dropped_and_counted() -> None:
     store = InMemoryStore()
     set_store(store)
-    out = await _run(_event(datetime.now(UTC) - timedelta(hours=5)))
-    assert out["status"] == "skipped_stale"
+    out = await _run(_event(datetime.now(UTC) - timedelta(minutes=8)))
+    assert out["status"] == "skipped_stale"  # 8 min > 5-min budget
     funnel = await store.ingestion()
     assert funnel["received_today"] == 1
     assert funnel["dropped_stale_today"] == 1
+
+
+async def test_source_latency_is_recorded() -> None:
+    store = InMemoryStore()
+    set_store(store)
+    # Two events ~60s and ~120s old -> avg ~90s, max ~120s.
+    await _run(_event(datetime.now(UTC) - timedelta(seconds=60)))
+    await _run(_event(datetime.now(UTC) - timedelta(seconds=120), title="Second"))
+    funnel = await store.ingestion()
+    assert 80 <= funnel["avg_news_age_s"] <= 100
+    assert 110 <= funnel["max_news_age_seen_s"] <= 130
 
 
 async def test_duplicate_headline_is_counted() -> None:
@@ -69,4 +76,5 @@ async def test_ingestion_counters_start_empty() -> None:
     set_store(store)
     assert await store.ingestion() == {
         "received_today": 0, "dropped_stale_today": 0, "dropped_duplicate_today": 0,
+        "avg_news_age_s": 0.0, "max_news_age_seen_s": 0.0,
     }
