@@ -4,9 +4,31 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import HTTPException, Request, status
+from fastapi import Header, HTTPException, Request, status
 
 from app.models.schemas import NewsEvent
+
+
+def admin_ok(token: str | None) -> bool:
+    """True when ``token`` authorizes admin actions.
+
+    Open (returns True for anyone) when no ``admin_token`` is configured — the
+    local/dev default. On a shared deployment set ``ADMIN_TOKEN`` and only a
+    matching token unlocks mutations.
+    """
+    from app.config import get_settings
+
+    configured = get_settings().admin_token
+    return not configured or token == configured
+
+
+def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
+    """FastAPI dependency: 403 unless the request carries a valid admin token."""
+    if not admin_ok(x_admin_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="admin token required for this action",
+        )
 
 
 def get_queue(request: Request) -> asyncio.Queue[NewsEvent]:

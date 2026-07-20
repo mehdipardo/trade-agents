@@ -153,6 +153,9 @@
   .toggle{position:relative;width:36px;height:20px;background:var(--bg-3);border-radius:20px;cursor:pointer;flex-shrink:0;transition:background .2s;border:1px solid var(--line)}
   .toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .2s}
   .toggle.on{background:var(--up);border-color:transparent} .toggle.on::after{transform:translateX(16px)}
+  /* Read-only (non-admin) controls: visible but inert. */
+  .ro,.strat.ro,.toggle.ro{cursor:default;opacity:.55;pointer-events:none}
+  .kill.ro{cursor:default;opacity:.6}
   .src-config{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:12px}
   .src-config .fld{display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px}
   .src-config label{font-size:11px;color:var(--ink-3);font-weight:500}
@@ -188,6 +191,7 @@
     <span class="chip violet">Paper · Testnet</span>
     <span class="chip" id="modeChip">connecting…</span>
     <span class="chip" id="llmChip" title="Groq LLM usage — calls today · total tokens · est. cost">LLM —</span>
+    <span class="chip amber hidden" id="roChip" title="Shared view — controls are disabled. Open with #admin=<token> to unlock.">read-only</span>
     <div class="spacer"></div>
     <nav class="tabs" role="tablist">
       <button class="on" data-tab="cockpit">Cockpit</button>
@@ -327,13 +331,32 @@ const fmtWhen=(iso)=>{if(!iso)return '';const d=new Date(iso);if(isNaN(d))return
 // News reference -> a compact, escaped, clickable line (link when a url exists).
 function newsLine(n){if(!n||!(n.title||n.url))return '';const when=fmtWhen(n.published_at);const src=n.source?esc(n.source):'';const meta=[when,src].filter(Boolean).join(' · ');const t=esc((n.title||'').slice(0,64));const u=safeUrl(n.url);const label=u?`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${t}</a>`:t;return `<div class="news-ref">${label}${meta?`<span class="dim"> · ${meta}</span>`:''}</div>`;}
 
+/* ---- Admin gating ----
+   The board is shared read-only. A holder of #admin=<token> unlocks the mutating
+   controls (close, kill switch, strategy, sources); the token is stored locally
+   and sent as X-Admin-Token. The backend enforces it regardless — hiding the
+   controls is just UX. IS_ADMIN is confirmed by /api/session (true in open/dev
+   mode where no ADMIN_TOKEN is configured). */
+(function(){const m=(location.hash||'').match(/admin=([^&]+)/);if(m){try{localStorage.setItem('adminToken',decodeURIComponent(m[1]));}catch(e){}location.hash='';}})();
+let ADMIN_TOKEN='';try{ADMIN_TOKEN=localStorage.getItem('adminToken')||'';}catch(e){}
+let IS_ADMIN=false;  // provisional; /api/session confirms
+
 /* ---- API ---- */
 async function api(path,body,method){
   const opt={method:method||(body?'POST':'GET'),headers:body?{'Content-Type':'application/json'}:{}};
+  if(ADMIN_TOKEN)opt.headers['X-Admin-Token']=ADMIN_TOKEN;
   if(body)opt.body=JSON.stringify(body);
   const r=await fetch(path,opt);
   if(!r.ok)throw r.status;
   return r.json().catch(()=>({}));
+}
+async function resolveSession(){
+  try{const s=await api('/api/session');IS_ADMIN=!!s.admin;}catch(e){IS_ADMIN=false;}
+  document.body.classList.toggle('read-only',!IS_ADMIN);
+  const ro=$('#roChip');if(ro)ro.classList.toggle('hidden',IS_ADMIN);
+  const kb=$('#killBtn');if(kb){kb.classList.toggle('ro',!IS_ADMIN);kb.title=IS_ADMIN?'':'read-only — admin token required';}
+  // Re-render control-bearing panels now that admin state is known.
+  refreshState();loadStrategies();if(!$('#tab-sources').classList.contains('hidden'))loadSources();
 }
 
 /* ---- Tabs ---- */
@@ -347,6 +370,7 @@ $$('nav.tabs button').forEach(b=>b.onclick=()=>{
 
 /* ---- Kill switch ---- */
 $('#killBtn').onclick=async()=>{
+  if(!IS_ADMIN)return;  // read-only viewers can't toggle the kill switch
   const on=$('#killBtn').dataset.on==='true';
   try{await api('/admin/killswitch',{active:!on,reason:'manual (dashboard)'});}catch(e){}
   refreshState();
@@ -506,10 +530,14 @@ function renderPositions(list){
        <td class="mono">${upnl}</td>
        <td>${tags||'—'}</td>
        <td style="text-align:right"></td>`);
-    const btn=el('button','btn mini','Close');
-    btn.onclick=async()=>{if(!confirm(`Close ${p.symbol||p.asset} at market?`))return;
-      try{await api('/admin/positions/close',{symbol:p.symbol||p.asset});refreshState();loadPerformance();}catch(e){}};
-    tr.lastElementChild.appendChild(btn);b.appendChild(tr);
+    // Manual close is an admin-only override; shared viewers never see it.
+    if(IS_ADMIN){
+      const btn=el('button','btn mini','Close');
+      btn.onclick=async()=>{if(!confirm(`Close ${p.symbol||p.asset} at market?`))return;
+        try{await api('/admin/positions/close',{symbol:p.symbol||p.asset});refreshState();loadPerformance();}catch(e){}};
+      tr.lastElementChild.appendChild(btn);
+    }
+    b.appendChild(tr);
   });
 }
 function renderRiskState(s){
@@ -551,7 +579,9 @@ async function loadStrategies(){
          <div class="s-kpis"><span>Risk <b>${(s.risk_per_trade_pct*100).toFixed(1)}%/trade</b></span><span>Conf <b>≥${(s.confidence_threshold*100).toFixed(0)}%</b></span>
            <span>SL <b>${s.stop_loss_pct}%</b></span><span>TP <b>${s.take_profit_pct}%</b></span>
            ${runner}${lev}</div>`);
-      c.onclick=async()=>{try{await api('/admin/strategy',{id:s.id});loadStrategies();}catch(e){}};
+      // Switching strategy is admin-only; viewers see the cards but can't change.
+      if(IS_ADMIN){c.onclick=async()=>{try{await api('/admin/strategy',{id:s.id});loadStrategies();}catch(e){}};}
+      else{c.disabled=true;c.classList.add('ro');}
       w.appendChild(c);
     });
   }catch(e){}
@@ -638,10 +668,11 @@ async function loadSources(){
       top.appendChild(el('div',null,
         `<h4><span class="stat-dot"></span>${s.name} <span class="chip">${s.kind}</span> <span class="chip">${s.cost}</span> ${srcStatus(s)}</h4>
          <div class="desc">${s.description} <small>· ${s.reactivity}</small></div>`));
-      const tg=el('div','toggle'+(s.enabled?' on':''));
-      tg.onclick=async()=>{try{await api(`/admin/sources/${s.id}/toggle`,{enabled:!s.enabled});loadSources();}catch(e){}};
+      const tg=el('div','toggle'+(s.enabled?' on':'')+(IS_ADMIN?'':' ro'));
+      if(IS_ADMIN){tg.onclick=async()=>{try{await api(`/admin/sources/${s.id}/toggle`,{enabled:!s.enabled});loadSources();}catch(e){}};}
       top.appendChild(tg);wrap.appendChild(top);
-      if(s.config_fields&&s.config_fields.length){
+      // Config editing is admin-only; viewers don't see the inputs at all.
+      if(IS_ADMIN&&s.config_fields&&s.config_fields.length){
         const form=el('div','src-config');
         s.config_fields.forEach(f=>{
           const fld=el('div','fld');
@@ -723,7 +754,7 @@ async function hydrate(){
   try{const h=await api('/api/health');$('#healthDot').className='dot ok';$('#modeChip').textContent=`${h.exchange_id} · ${h.llm_provider}`;}catch(e){$('#healthDot').className='dot';}
   loadPerformance();refreshState();loadStrategies();loadSignals();loadOrders();loadCritiques();loadTrades();loadLlmUsage();
 }
-setChart('BTC/USDT');showScanner();connectWs();
+resolveSession();setChart('BTC/USDT');showScanner();connectWs();
 setInterval(()=>{refreshState();loadPerformance();loadLlmUsage();},5000);
 setInterval(loadCritiques,15000);
 setInterval(refreshChart,20000);

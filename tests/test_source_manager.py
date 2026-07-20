@@ -55,7 +55,8 @@ def test_default_sources_are_the_free_working_ones() -> None:
 
     catalog.reset_state()
     enabled = {s.id for s in catalog.list_specs() if catalog.is_enabled(s.id)}
-    # RSS firehose (crypto+markets+world) + macro calendar. The paid SSE
-    # aggregator is OFF by default (its free endpoint went 402).
-    assert enabled == {"econ_calendar", "crypto_news_rss"}
+    # RSS firehose (crypto+markets+world) + macro calendar + Trump-family Truth
+    # Social watchlist (ships pre-configured). The paid SSE aggregator is OFF by
+    # default (its free endpoint went 402).
+    assert enabled == {"econ_calendar", "crypto_news_rss", "trump_truthsocial"}
     assert not catalog.is_enabled("news_aggregator")

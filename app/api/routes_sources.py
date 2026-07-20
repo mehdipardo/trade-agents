@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
+from app.api.deps import require_admin
 from app.config import get_settings
 from app.logging_config import get_logger
 from app.services.store import get_store
@@ -41,7 +42,7 @@ class ToggleRequest(BaseModel):
     enabled: bool
 
 
-@router.post("/admin/sources/{source_id}/toggle")
+@router.post("/admin/sources/{source_id}/toggle", dependencies=[Depends(require_admin)])
 async def toggle_source(source_id: str, body: ToggleRequest) -> dict[str, Any]:
     try:
         enabled = catalog.set_enabled(source_id, body.enabled)
@@ -66,7 +67,7 @@ class ConfigRequest(BaseModel):
     values: dict[str, str]
 
 
-@router.post("/admin/sources/{source_id}/config")
+@router.post("/admin/sources/{source_id}/config", dependencies=[Depends(require_admin)])
 async def set_source_config(source_id: str, body: ConfigRequest) -> dict[str, Any]:
     """Persist config for a source and hot-restart its background task."""
     spec = catalog.get_spec(source_id)

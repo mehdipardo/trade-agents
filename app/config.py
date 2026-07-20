@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     # --- Runtime ---------------------------------------------------------
     app_env: str = "dev"
 
+    # Admin token gating every MUTATING dashboard action (close, kill switch,
+    # strategy, source config, inject). Empty = open (local/dev). Set it on a
+    # PUBLIC/shared deployment so viewers get a read-only board and only the
+    # holder of ?#admin=<token> can change anything.
+    admin_token: str = ""
+
     # --- Safety guards (see ``_enforce_safety_guards``) ------------------
     paper_trading: bool = True
     exchange_sandbox: bool = True
@@ -127,7 +133,10 @@ class Settings(BaseSettings):
     # Watchlist: comma/newline-separated entries — a bare handle (@realDonaldTrump)
     # resolved to its account id, or a full .../accounts/<id>/statuses URL / mirror.
     # The "10 most influential accounts". Falls back to the single truth_social_url.
-    truth_social_urls: str = ""
+    # Default: the active Trump-family accounts, editable from the (admin) dashboard.
+    truth_social_urls: str = (
+        "@realDonaldTrump, @DonaldJTrumpJr, @EricTrump, @LaraLeaTrump"
+    )
     # Bearer token for the Cloudflare/auth-gated Truth Social API (optional; some
     # mirrors are open). Provide via env only — never commit it.
     truth_social_token: str = ""

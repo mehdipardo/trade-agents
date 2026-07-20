@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, model_validator
 
-from app.api.deps import enqueue
+from app.api.deps import enqueue, require_admin
 from app.ingestion.normalizer import normalize_payload
 from app.ingestion.simulator import list_scenarios, load_scenario
 from app.logging_config import get_logger
@@ -50,6 +50,7 @@ class InjectResponse(BaseModel):
     "/inject",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=InjectResponse,
+    dependencies=[Depends(require_admin)],
 )
 async def inject(body: InjectRequest, request: Request) -> InjectResponse:
     """Inject a scenario or a raw event into the pipeline (non-blocking)."""
@@ -88,7 +89,7 @@ class KillSwitchRequest(BaseModel):
     reason: str | None = None
 
 
-@router.post("/killswitch")
+@router.post("/killswitch", dependencies=[Depends(require_admin)])
 async def killswitch(body: KillSwitchRequest) -> dict[str, Any]:
     """Activate or reset the manual kill switch.
 
@@ -118,7 +119,7 @@ class ClosePositionRequest(BaseModel):
     symbol: str
 
 
-@router.post("/positions/close")
+@router.post("/positions/close", dependencies=[Depends(require_admin)])
 async def close_position(body: ClosePositionRequest) -> dict[str, Any]:
     """Force-close an open position at market (main + runner if present)."""
     from app.services.position_monitor import close_position_manually
@@ -133,7 +134,7 @@ async def close_position(body: ClosePositionRequest) -> dict[str, Any]:
     return result
 
 
-@router.post("/strategy")
+@router.post("/strategy", dependencies=[Depends(require_admin)])
 async def set_strategy(body: StrategyRequest) -> dict[str, Any]:
     """Switch the active strategy (SL/TP, sizing, gates applied from next event)."""
     try:

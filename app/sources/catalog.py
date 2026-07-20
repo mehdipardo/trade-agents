@@ -28,6 +28,7 @@ class ConfigField:
     secret: bool = False  # renders as <input type="password"> and is masked on GET
     required: bool = True
     help: str = ""
+    default: str = ""  # pre-filled value when the operator hasn't set one
 
 
 @dataclass(frozen=True)
@@ -102,25 +103,29 @@ CATALOG: tuple[SourceSpec, ...] = (
         "frequently.",
         cost="free",
         reactivity="~seconds (poll floor — not millisecond/HFT)",
-        default_enabled=False,
-        notes="No official API: direct polling of the public statuses endpoints is "
-        "fastest but ToS-gray and can break; a mirror archive (~5 min) is the "
-        "robust fallback. Our latency floor is the poll interval (seconds), not the "
-        "paid millisecond 'Truth API' sold to HFT desks — we react on meaning, not speed.",
-        tags=("social", "high-impact"),
+        default_enabled=True,
+        notes="Ships watching the Trump family by default (editable). No official "
+        "API: direct polling of the public statuses endpoints is fastest but "
+        "ToS-gray and can break — it is Cloudflare/auth-gated, so add a bearer "
+        "token (or a mirror URL) for it to reliably pull. Our latency floor is the "
+        "poll interval (seconds), not the paid millisecond 'Truth API' sold to HFT.",
+        tags=("social", "high-impact", "recommended"),
         config_fields=(
             ConfigField(
                 name="truth_social_urls",
                 label="Accounts watchlist (handles or URLs)",
                 placeholder="@realDonaldTrump, @DonaldJTrumpJr, @dbongino, @kashpatel",
+                default="@realDonaldTrump, @DonaldJTrumpJr, @EricTrump, @LaraLeaTrump",
                 help="Comma/newline-separated handles (resolved automatically) or full "
-                "statuses URLs — e.g. the 10 most influential accounts. Falls back to "
-                "the single URL below.",
+                "statuses URLs. Defaults to the active Trump-family accounts; edit to "
+                "add the other most-influential accounts.",
             ),
             ConfigField(
                 name="truth_social_token",
                 label="API bearer token (optional)",
                 placeholder="eyJ… (leave blank to try unauthenticated / a mirror)",
+                required=False,
+                secret=True,
                 help="Truth Social's API is Cloudflare/auth-gated; a token makes polling "
                 "reliable. Set via env, never commit it.",
             ),
@@ -128,6 +133,7 @@ CATALOG: tuple[SourceSpec, ...] = (
                 name="truth_social_url",
                 label="Statuses feed URL (single, legacy)",
                 placeholder="https://truthsocial.com/api/v1/accounts/<id>/statuses",
+                required=False,
                 help="Single-account fallback if the watchlist above is empty.",
             ),
         ),
@@ -250,7 +256,8 @@ def as_dict(
         vals = current_values.get(s.id, {})
         fields: list[dict] = []
         for f in s.config_fields:
-            raw = vals.get(f.name, "")
+            # Operator override first, else the shipped default (pre-filled).
+            raw = vals.get(f.name, "") or f.default
             fields.append({
                 "name": f.name,
                 "label": f.label,
@@ -273,6 +280,10 @@ def as_dict(
             "enabled": is_enabled(s.id),
             "running": s.id in running_ids,
             "config_fields": fields,
-            "needs_config": bool(s.config_fields) and any(not fld["has_value"] for fld in fields),
+            # Only REQUIRED fields left empty count as "needs setup" — optional
+            # fields (a token, a legacy fallback) never block a source.
+            "needs_config": any(
+                not fld["has_value"] for fld in fields if fld["required"]
+            ),
         })
     return out

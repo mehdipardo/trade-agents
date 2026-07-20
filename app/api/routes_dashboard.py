@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
+from app.api.deps import admin_ok
 from app.config import get_settings
 from app.services.store import get_store
 from app.services.strategy import DEFAULT_STRATEGY_ID, list_strategies
@@ -37,6 +38,20 @@ async def health() -> dict[str, object]:
         "prompt_version": PROMPT_VERSION,
         "asset_whitelist": list(settings.asset_whitelist_set),
         "time": datetime.now(UTC).isoformat(),
+    }
+
+
+@router.get("/session")
+async def session(x_admin_token: str | None = Header(default=None)) -> dict[str, bool]:
+    """Whether the dashboard should render mutating controls for this caller.
+
+    ``admin_required`` is true when an ADMIN_TOKEN is configured (shared/public
+    deployment); ``admin`` is true when this request may perform mutations
+    (always true in open/dev mode, or when the token matches).
+    """
+    return {
+        "admin_required": bool(get_settings().admin_token),
+        "admin": admin_ok(x_admin_token),
     }
 
 
