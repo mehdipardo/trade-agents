@@ -13,7 +13,8 @@ def test_truth_social_ships_with_trump_family_watchlist() -> None:
     sources = catalog.as_dict()
     ts = _spec(sources, "trump_truthsocial")
     watchlist = next(f for f in ts["config_fields"] if f["name"] == "truth_social_urls")
-    assert "@realDonaldTrump" in watchlist["value"]
+    # Trump leads as a full statuses URL (known id, no auth-gated lookup needed).
+    assert "107780257626128497" in watchlist["value"]
     assert "@DonaldJTrumpJr" in watchlist["value"]
     assert watchlist["has_value"] is True
 

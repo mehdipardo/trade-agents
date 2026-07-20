@@ -134,8 +134,12 @@ class Settings(BaseSettings):
     # resolved to its account id, or a full .../accounts/<id>/statuses URL / mirror.
     # The "10 most influential accounts". Falls back to the single truth_social_url.
     # Default: the active Trump-family accounts, editable from the (admin) dashboard.
+    # Trump leads as a FULL statuses URL (known, stable account id) so his feed —
+    # the critical one — works without the auth-gated handle-lookup call; the rest
+    # are handles resolved best-effort.
     truth_social_urls: str = (
-        "@realDonaldTrump, @DonaldJTrumpJr, @EricTrump, @LaraLeaTrump"
+        "https://truthsocial.com/api/v1/accounts/107780257626128497/statuses"
+        "?exclude_replies=true, @DonaldJTrumpJr, @EricTrump, @LaraLeaTrump"
     )
     # Bearer token for the Cloudflare/auth-gated Truth Social API (optional; some
     # mirrors are open). Provide via env only — never commit it.

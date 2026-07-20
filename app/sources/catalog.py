@@ -115,7 +115,8 @@ CATALOG: tuple[SourceSpec, ...] = (
                 name="truth_social_urls",
                 label="Accounts watchlist (handles or URLs)",
                 placeholder="@realDonaldTrump, @DonaldJTrumpJr, @dbongino, @kashpatel",
-                default="@realDonaldTrump, @DonaldJTrumpJr, @EricTrump, @LaraLeaTrump",
+                default="https://truthsocial.com/api/v1/accounts/107780257626128497/"
+                "statuses?exclude_replies=true, @DonaldJTrumpJr, @EricTrump, @LaraLeaTrump",
                 help="Comma/newline-separated handles (resolved automatically) or full "
                 "statuses URLs. Defaults to the active Trump-family accounts; edit to "
                 "add the other most-influential accounts.",

@@ -120,9 +120,9 @@ async def test_resolve_entries_handles_urls_and_handles(
     ]
     urls = await truth_social.resolve_entries(entries, base="https://truthsocial.com")
     assert urls == [
-        "https://truthsocial.com/api/v1/accounts/107780257626128497/statuses",
+        "https://truthsocial.com/api/v1/accounts/107780257626128497/statuses?exclude_replies=true",
         "https://mirror.example/accounts/9/statuses",
-        "https://truthsocial.com/api/v1/accounts/12345/statuses",
+        "https://truthsocial.com/api/v1/accounts/12345/statuses?exclude_replies=true",
     ]
 
 

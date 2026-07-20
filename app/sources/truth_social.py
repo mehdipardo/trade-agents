@@ -151,7 +151,7 @@ async def resolve_entries(entries: list[str], base: str = DEFAULT_TS_BASE) -> li
             continue
         acct_id = await _lookup_account_id(entry, base)
         if acct_id:
-            urls.append(f"{base}/api/v1/accounts/{acct_id}/statuses")
+            urls.append(f"{base}/api/v1/accounts/{acct_id}/statuses?exclude_replies=true")
         else:
             log.warning("truth_entry_unresolved", entry=entry)
     return urls
