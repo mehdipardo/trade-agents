@@ -103,12 +103,13 @@ CATALOG: tuple[SourceSpec, ...] = (
         "frequently.",
         cost="free",
         reactivity="~seconds (poll floor — not millisecond/HFT)",
-        default_enabled=True,
-        notes="Ships watching the Trump family by default (editable). No official "
-        "API: direct polling of the public statuses endpoints is fastest but "
-        "ToS-gray and can break — it is Cloudflare/auth-gated, so add a bearer "
-        "token (or a mirror URL) for it to reliably pull. Our latency floor is the "
-        "poll interval (seconds), not the paid millisecond 'Truth API' sold to HFT.",
+        default_enabled=False,
+        notes="Pre-configured for the Trump family, but OFF by default: Truth "
+        "Social's API is Cloudflare-gated and blocks datacenter/VPS IPs, so direct "
+        "polling from a server usually 403s. Enable it only when you point the "
+        "watchlist at a legitimate feed our server CAN reach — a third-party RSS/"
+        "JSON mirror, an automation that POSTs to /webhooks/news, or the paid Truth "
+        "API. Do not try to defeat the Cloudflare protection.",
         tags=("social", "high-impact", "recommended"),
         config_fields=(
             ConfigField(
