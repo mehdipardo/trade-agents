@@ -102,6 +102,34 @@ async def test_trade_ledger_records_and_reads() -> None:
     assert trades[0]["leg"] == "runner"  # newest first
 
 
+async def test_get_price_times_out_instead_of_hanging(monkeypatch) -> None:
+    # A stalled provider must not hang the caller — get_price returns None fast.
+    monkeypatch.setattr(prices, "_FETCH_TIMEOUT_S", 0.1)
+
+    async def _hang(symbol: str):  # noqa: ANN202
+        import asyncio
+
+        await asyncio.sleep(10)  # never resolves within the timeout
+
+    monkeypatch.setattr(prices, "_binance_price", _hang)
+    assert await prices.get_price("BTC/USDT") is None
+
+
+async def test_failed_lookup_is_negative_cached(monkeypatch) -> None:
+    # A miss is cached for one TTL so repeated polls don't re-hit the slow path.
+    calls = {"n": 0}
+
+    async def _miss(symbol: str):  # noqa: ANN202
+        calls["n"] += 1
+        return None
+
+    monkeypatch.setattr(prices, "_binance_price", _miss)
+    prices.set_client(_FakeClient({}))  # ccxt also resolves nothing
+    assert await prices.get_price("BTC/USDT") is None
+    assert await prices.get_price("BTC/USDT") is None
+    assert calls["n"] == 1  # second call served from the negative cache
+
+
 async def test_klines_none_for_non_crypto_symbol() -> None:
     # TradFi symbols aren't Binance crypto pairs -> None (no network hit).
     assert await prices.klines("NVDA/USDT") is None

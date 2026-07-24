@@ -14,6 +14,7 @@ when the library or network is unavailable.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -24,10 +25,14 @@ from app.logging_config import get_logger
 log = get_logger("app.services.prices")
 
 _CACHE_TTL_S = 3.0
+# Hard ceiling on a single price resolution. Without this, a stalled ccxt
+# fallback (e.g. Binance blocking the VPS so every mark queues on the
+# rate-limited MEXC client) can hang /api/positions and freeze the dashboard.
+_FETCH_TIMEOUT_S = 4.0
 
 _client: Any | None = None
 _client_failed = False
-_cache: dict[str, tuple[float, float]] = {}  # symbol -> (price, epoch)
+_cache: dict[str, tuple[float | None, float]] = {}  # symbol -> (price|None, epoch)
 _last_source: dict[str, str] = {}  # symbol -> "binance" | "ccxt"
 _exchange_id = "mexc"
 
@@ -125,27 +130,44 @@ async def _ccxt_price(symbol: str) -> float | None:
     return None
 
 
+async def _resolve(symbol: str) -> tuple[float | None, str]:
+    """Binance REST first (fast), ccxt fallback. Returns (price, source)."""
+    price = await _binance_price(symbol)
+    if price is not None:
+        return price, "binance"
+    return await _ccxt_price(symbol), "ccxt"
+
+
 async def get_price(symbol: str) -> float | None:
     """Return the live mark price for ``symbol`` (quote units), or ``None``.
 
     Crypto resolves via Binance REST first (fast, reliable); everything else
-    (and any Binance miss) via ccxt on the configured exchange.
+    (and any Binance miss) via ccxt on the configured exchange. The whole
+    resolution is time-boxed, and BOTH hits and misses are cached briefly so a
+    failing symbol is retried at most once per TTL instead of on every poll —
+    that is what keeps /api/positions responsive when an upstream is degraded.
     """
     now = time.time()
     hit = _cache.get(symbol)
     if hit is not None and now - hit[1] < _CACHE_TTL_S:
         return hit[0]
 
-    price = await _binance_price(symbol)
-    source = "binance"
-    if price is None:
-        price = await _ccxt_price(symbol)
-        source = "ccxt"
+    try:
+        price, source = await asyncio.wait_for(_resolve(symbol), timeout=_FETCH_TIMEOUT_S)
+    except TimeoutError:
+        log.warning("price_fetch_timeout", symbol=symbol)
+        price, source = None, "timeout"
+    except Exception as exc:  # noqa: BLE001 - degrade to None, never propagate
+        log.warning("price_fetch_error", symbol=symbol, error=str(exc))
+        price, source = None, "error"
 
     if price is not None and price > 0:
         _cache[symbol] = (price, now)
         _last_source[symbol] = source
         return price
+    # Negative cache: remember the miss for one TTL so repeated polls don't
+    # re-queue the slow fallback path (the pile-up that hangs the endpoint).
+    _cache[symbol] = (None, now)
     log.warning("price_unresolved", symbol=symbol)
     return None
 
@@ -209,7 +231,8 @@ async def warm() -> None:
     if client is None:
         return
     try:
-        await client.load_markets()
+        # Time-boxed so a slow/blocked exchange can't hang app startup.
+        await asyncio.wait_for(client.load_markets(), timeout=15.0)
         log.info("price_provider_warmed", exchange_id=_exchange_id)
     except Exception as exc:  # noqa: BLE001 - warming is best-effort
         log.warning("price_warm_failed", error=str(exc))
